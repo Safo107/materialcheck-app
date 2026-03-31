@@ -1,1 +1,9 @@
 node_modules/
+dist/
+dist-app/
+dist2/
+temp-app/
+android/
+ios/
+*.jks
+.expo/
