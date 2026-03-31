@@ -15,6 +15,7 @@
       }
     },
     "production": {
+      "requireCommit": true,
       "android": {
         "buildType": "app-bundle"
       }
