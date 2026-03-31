@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "Material Check | ElektroGenius",
+    "slug": "material-check-elektrogenius",
+    "version": "1.6.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "materialcheck",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.elektrogenius.materialcheck",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Scannen von Barcodes für Artikel",
+        "NSPhotoLibraryUsageDescription": "Auswahl eines Logos für dein Profil"
+      }
+    },
+    "android": {
+      "package": "com.elektrogenius.materialcheck",
+      "versionCode": 14,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0d1117"
+      },
+      "edgeToEdgeEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "baseUrl": ""
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0d1117"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Kamera wird für den Barcode-Scanner benötigt."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "eecb4193-0767-41c1-ab79-8f9fd2af3136"
+      },
+      "router": {}
+    },
+    "owner": "elektrogenius"
+  }
+}

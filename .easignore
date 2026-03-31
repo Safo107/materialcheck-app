@@ -1,0 +1,11 @@
+.emergent
+backend
+node_modules
+android/.gradle
+android/build
+android/app/build
+dist
+dist-app
+dist2
+temp-app
+*.jks
