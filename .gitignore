@@ -1,4 +1,5 @@
 node_modules/
+.metro-cache/
 dist/
 dist-app/
 dist2/
