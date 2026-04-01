@@ -2,6 +2,60 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// ── Auto-Cloud-Sync ──────────────────────────────────────────────────────────
+const BACKEND = "https://materialcheck-backend2.onrender.com";
+let _autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function _triggerCloudSync(state: {
+  folders: any[]; materials: any[]; tasks: any[];
+  suppliers: any[]; loans: any[];
+}) {
+  try {
+    const profileRaw = await AsyncStorage.getItem("eg-profile-v1");
+    if (!profileRaw) return;
+    const profile = JSON.parse(profileRaw);
+    if (!profile.email) return;
+
+    const deviceIdRaw = await AsyncStorage.getItem("eg-device-id");
+    if (!deviceIdRaw) return;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    try {
+      await fetch(`${BACKEND}/api/materials/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: deviceIdRaw,
+          email: profile.email,
+          folders: state.folders,
+          materials: state.materials,
+          tasks: state.tasks,
+          suppliers: state.suppliers,
+          loans: state.loans,
+          syncedAt: new Date().toISOString(),
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    // Auto-sync scheitert still — kein Crash, kein Alert
+  }
+}
+
+function scheduleCloudSync(getState: () => {
+  folders: any[]; materials: any[]; tasks: any[];
+  suppliers: any[]; loans: any[];
+}) {
+  if (_autoSyncTimer) clearTimeout(_autoSyncTimer);
+  _autoSyncTimer = setTimeout(() => {
+    _autoSyncTimer = null;
+    _triggerCloudSync(getState());
+  }, 1500);
+}
+
 const STORAGE_KEY = "eg-materialcheck-v4";
 
 export type Category =
@@ -175,11 +229,13 @@ export const useStore = create<StoreState>((set, get) => ({
       nextFolderId: s.nextFolderId + 1,
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   updateFolder: (id, name, icon) => {
     set(s => ({ folders: s.folders.map(f => f.id===id ? {...f, name, icon} : f) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   deleteFolder: (id) => {
@@ -190,6 +246,7 @@ export const useStore = create<StoreState>((set, get) => ({
       tasks: s.tasks.filter(t => t.folderId !== id),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   // ── Materialien ──────────────────────────────────
@@ -202,6 +259,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activities: [log, ...s.activities].slice(0, 40),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   updateMaterial: (id, updates) => {
@@ -212,6 +270,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activities: [log, ...s.activities].slice(0, 40),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   deleteMaterial: (id) => {
@@ -222,6 +281,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activities: [log, ...s.activities].slice(0, 40),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   changeQty: (id, delta) => {
@@ -239,6 +299,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activities: [log, ...s.activities].slice(0, 40),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   setQty: (id, qty) => {
@@ -256,6 +317,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activities: [log, ...s.activities].slice(0, 40),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   moveMaterial: (id, folderId) => {
@@ -266,6 +328,7 @@ export const useStore = create<StoreState>((set, get) => ({
       activities: [log, ...s.activities].slice(0, 40),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   // ── Aufgaben ─────────────────────────────────────
@@ -273,21 +336,25 @@ export const useStore = create<StoreState>((set, get) => ({
     const task: Task = { ...t, id: get().nextTaskId, createdAt: today() };
     set(s => ({ tasks: [...s.tasks, task], nextTaskId: s.nextTaskId + 1 }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   updateTask: (id, t) => {
     set(s => ({ tasks: s.tasks.map(x => x.id===id ? {...x, ...t} : x) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   deleteTask: (id) => {
     set(s => ({ tasks: s.tasks.filter(x => x.id !== id) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   completeTask: (id) => {
     set(s => ({ tasks: s.tasks.map(x => x.id===id ? {...x, status:"done"} : x) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   // ── Lieferanten ──────────────────────────────────
@@ -295,16 +362,19 @@ export const useStore = create<StoreState>((set, get) => ({
     const supplier: Supplier = { ...s, id: get().nextSupplierId, createdAt: today() };
     set(state => ({ suppliers: [...state.suppliers, supplier], nextSupplierId: state.nextSupplierId + 1 }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   updateSupplier: (id, s) => {
     set(state => ({ suppliers: state.suppliers.map(x => x.id===id ? {...x, ...s} : x) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   deleteSupplier: (id) => {
     set(s => ({ suppliers: s.suppliers.filter(x => x.id !== id) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   // ── Ausleihen ────────────────────────────────────
@@ -312,6 +382,7 @@ export const useStore = create<StoreState>((set, get) => ({
     const loan: LoanItem = { ...l, id: get().nextLoanId, loanDate: today(), returned: false };
     set(s => ({ loans: [...s.loans, loan], nextLoanId: s.nextLoanId + 1 }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   returnLoan: (id) => {
@@ -319,11 +390,13 @@ export const useStore = create<StoreState>((set, get) => ({
       loans: s.loans.map(l => l.id===id ? {...l, returned:true, returnDate:today()} : l),
     }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   deleteLoan: (id) => {
     set(s => ({ loans: s.loans.filter(l => l.id !== id) }));
     get().saveToStorage();
+    scheduleCloudSync(get);
   },
 
   // ── Helpers ──────────────────────────────────────
