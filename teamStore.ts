@@ -252,7 +252,13 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         const safeData = {
           ...data,
           members: Array.isArray(data.members) ? data.members : [],
-          warehouses: Array.isArray(data.warehouses) ? data.warehouses : [],
+          warehouses: Array.isArray(data.warehouses)
+            ? data.warehouses.map((wh: any) => ({
+                ...wh,
+                warehouseName: wh.warehouseName ?? wh.name ?? "",
+                warehouseIcon: wh.warehouseIcon ?? wh.icon ?? "warehouse",
+              }))
+            : [],
         };
         set({ company: safeData, loading: false, lastLoadedEmail: email });
         get().saveTeamData();
