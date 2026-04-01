@@ -533,7 +533,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         body: JSON.stringify({
           companyId: company.companyId,
           warehouseId,
-          userEmail: p.email,
+          email: p.email,
           materials,
           tasks,
           activities,
