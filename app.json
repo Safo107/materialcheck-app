@@ -17,8 +17,8 @@
       }
     },
     "android": {
-      "package": "com.elektrogenius.materialcheck",
-      "versionCode": 14,
+      "package": "de.elektrogenius.materialcheck.firmenwagen",
+      "versionCode": 15,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0d1117"
