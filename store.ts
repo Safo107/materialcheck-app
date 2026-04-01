@@ -6,6 +6,100 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const BACKEND = "https://materialcheck-backend2.onrender.com";
 let _autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
+// ── Echtzeit-Sync (WebSocket) ─────────────────────────────────────────────────
+let _ws: WebSocket | null = null;
+let _wsEmail: string | null = null;
+let _wsDeviceId: string | null = null;
+let _wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let _wsReconnectDelay = 2000;
+let _wsStopped = false;
+
+async function _pullFromCloud(email: string, deviceId: string) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(`${BACKEND}/api/materials/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, deviceId }),
+        signal: controller.signal,
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.found) return;
+      const { folders, materials, tasks, suppliers, loans } = data;
+      if (folders && materials) {
+        useStore.getState().restoreFromCloud(
+          folders, materials, tasks ?? [], suppliers ?? [], loans ?? []
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    // Pull scheitert still
+  }
+}
+
+function _connectWebSocket(email: string, deviceId: string) {
+  if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return;
+  const wsUrl = `wss://materialcheck-backend2.onrender.com/ws/company/${encodeURIComponent(email)}`;
+  try {
+    _ws = new WebSocket(wsUrl);
+  } catch {
+    _scheduleReconnect(email, deviceId);
+    return;
+  }
+
+  _ws.onopen = () => {
+    _wsReconnectDelay = 2000; // Reset backoff on success
+  };
+
+  _ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "data_updated" && msg.deviceId !== deviceId) {
+        // Ein anderes Gerät hat Daten synchronisiert → sofort pullen
+        _pullFromCloud(email, deviceId);
+      }
+    } catch { /* */ }
+  };
+
+  _ws.onclose = () => {
+    _ws = null;
+    if (!_wsStopped) _scheduleReconnect(email, deviceId);
+  };
+
+  _ws.onerror = () => {
+    _ws?.close();
+  };
+}
+
+function _scheduleReconnect(email: string, deviceId: string) {
+  if (_wsReconnectTimer) clearTimeout(_wsReconnectTimer);
+  _wsReconnectTimer = setTimeout(() => {
+    _wsReconnectTimer = null;
+    if (!_wsStopped) _connectWebSocket(email, deviceId);
+  }, _wsReconnectDelay);
+  _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, 60000); // Max 60s
+}
+
+export function startRealtimeSync(email: string, deviceId: string) {
+  _wsStopped = false;
+  _wsEmail = email;
+  _wsDeviceId = deviceId;
+  _connectWebSocket(email, deviceId);
+}
+
+export function stopRealtimeSync() {
+  _wsStopped = true;
+  if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
+  if (_ws) { _ws.close(); _ws = null; }
+  _wsEmail = null;
+  _wsDeviceId = null;
+}
+
 async function _triggerCloudSync(state: {
   folders: any[]; materials: any[]; tasks: any[];
   suppliers: any[]; loans: any[];
@@ -206,6 +300,15 @@ export const useStore = create<StoreState>((set, get) => ({
     } catch {
       set({ loaded: true });
     }
+    // Echtzeit-Sync starten sobald Profil und DeviceId verfügbar
+    try {
+      const profileRaw = await AsyncStorage.getItem("eg-profile-v1");
+      const deviceIdRaw = await AsyncStorage.getItem("eg-device-id");
+      if (profileRaw && deviceIdRaw) {
+        const profile = JSON.parse(profileRaw);
+        if (profile.email) startRealtimeSync(profile.email, deviceIdRaw);
+      }
+    } catch { /* */ }
   },
 
   saveToStorage: async () => {
