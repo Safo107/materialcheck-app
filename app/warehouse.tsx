@@ -302,7 +302,7 @@ export default function WarehouseScreen() {
     <SafeAreaView style={s.container} edges={["top","left","right"]}>
       {/* HEADER */}
       <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={s.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace("/company")}>
           <ArrowLeft size={18} color={C.text} />
         </TouchableOpacity>
         <View style={{ flex:1 }}>
