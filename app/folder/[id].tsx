@@ -139,7 +139,8 @@ export default function FolderScreen() {
     const next = folderDeletePin + d;
     setFolderDeletePin(next);
     if (next.length === 4) {
-      const savedPin = await AsyncStorage.getItem("eg-app-pin");
+      let savedPin: string | null = null;
+      try { savedPin = await AsyncStorage.getItem("eg-app-pin"); } catch {}
       if (!savedPin || next === savedPin) {
         setShowFolderDeleteModal(false);
         deleteFolder(folderId);
@@ -163,7 +164,8 @@ export default function FolderScreen() {
     const next = matDeletePin + d;
     setMatDeletePin(next);
     if (next.length === 4) {
-      const savedPin = await AsyncStorage.getItem("eg-app-pin");
+      let savedPin: string | null = null;
+      try { savedPin = await AsyncStorage.getItem("eg-app-pin"); } catch {}
       if (!savedPin || next === savedPin) {
         if (pendingDeleteMatId !== null) deleteMaterial(pendingDeleteMatId);
         setShowMatDeleteModal(false);
