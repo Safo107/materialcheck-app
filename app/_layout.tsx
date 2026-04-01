@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { Platform } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useStore } from "../store";
 import { useLang } from "../i18n";
@@ -54,24 +55,24 @@ export default function RootLayout() {
 
   if (showOnboarding) {
     return (
-      <>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="light"/>
         <Onboarding onDone={() => setShowOnboarding(false)} />
-      </>
+      </GestureHandlerRootView>
     );
   }
 
   if (locked) {
     return (
-      <>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <StatusBar style="light"/>
         <AppLock onUnlocked={() => setLocked(false)}/>
-      </>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="light"/>
       <Stack
         screenOptions={{
@@ -105,6 +106,6 @@ export default function RootLayout() {
         {/* Gemeinsam */}
         <Stack.Screen name="profile"/>
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }
