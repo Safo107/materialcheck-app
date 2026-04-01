@@ -313,7 +313,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       if (res.ok) {
         const data = await res.json();
         await get().loadCompany(company.companyId, p.email);
-        return data.warehouseId;
+        return data.warehouse?.warehouseId ?? data.warehouseId ?? "created";
       }
       return null;
     } catch { return null; }
