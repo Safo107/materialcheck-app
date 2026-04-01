@@ -6,5 +6,5 @@ dist2/
 temp-app/
 android/
 ios/
-*.jks
+# *.jks — uncommitted to allow EAS local credentials
 .expo/

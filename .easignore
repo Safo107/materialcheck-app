@@ -5,5 +5,5 @@ dist2/
 temp-app/
 android/
 ios/
-*.jks
+# my-release-key.jks must be included for EAS local credentials
 .expo/
