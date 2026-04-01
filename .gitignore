@@ -9,3 +9,5 @@ ios/
 # *.jks — uncommitted to allow EAS local credentials
 .expo/
 @elektrogenius__material-check-elektrogenius.jks
+credentials.json
+my-release-key.jks
