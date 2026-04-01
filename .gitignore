@@ -11,3 +11,4 @@ ios/
 @elektrogenius__material-check-elektrogenius.jks
 credentials.json
 my-release-key.jks
+.claude/
