@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Linking,
+  Alert, Linking, Share,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -30,6 +30,10 @@ const C = {
   text:"#e6edf3", text2:"#8b949e", text3:"#6e7681",
 };
 
+const CAT_ICONS: Record<string,string> = {
+  kabel:"", sicherung:"", steckdose:"", schalter:"",
+  verteiler:"", leitung:"", werkzeug:"", sonstiges:"",
+};
 const ACT_ICONS: Record<string,any> = { add:Plus, remove:Minus, edit:Edit2, folder:Folder, move:RefreshCw, task:ClipboardList, loan:RotateCcw };
 const ACT_BG: Record<string,string> = {
   add:"rgba(63,185,80,0.15)", remove:"rgba(248,81,73,0.15)",

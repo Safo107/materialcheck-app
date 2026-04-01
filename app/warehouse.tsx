@@ -86,21 +86,25 @@ export default function WarehouseScreen() {
   }, []);
 
   const init = async () => {
-    const raw = await AsyncStorage.getItem("eg-profile-v1");
-    if (!raw) return;
-    const p = JSON.parse(raw);
-    setMyEmail(p.email ?? ""); setMyName(p.userName || p.email || "");
-    setLoading(true);
-    const data = await loadWarehouse(warehouseId ?? "");
-    if (data) {
-      setMaterials(data.materials ?? []);
-      setTasks(data.tasks ?? []);
-      setActivities(data.activities ?? []);
-      setUserRole(data.userRole ?? "member");
-    }
-    setLoading(false);
-    if (warehouseId) {
-      connectWebSocket(warehouseId, p.email ?? "", p.userName || p.email || "", handleWsUpdate);
+    try {
+      const raw = await AsyncStorage.getItem("eg-profile-v1");
+      if (!raw) { setLoading(false); return; }
+      const p = JSON.parse(raw);
+      setMyEmail(p.email ?? ""); setMyName(p.userName || p.email || "");
+      setLoading(true);
+      const data = await loadWarehouse(warehouseId ?? "");
+      if (data) {
+        setMaterials(data.materials ?? []);
+        setTasks(data.tasks ?? []);
+        setActivities(data.activities ?? []);
+        setUserRole(data.userRole ?? "member");
+      }
+      setLoading(false);
+      if (warehouseId) {
+        connectWebSocket(warehouseId, p.email ?? "", p.userName || p.email || "", handleWsUpdate);
+      }
+    } catch {
+      setLoading(false);
     }
   };
 

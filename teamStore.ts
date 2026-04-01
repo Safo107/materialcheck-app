@@ -102,6 +102,9 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
   }
 }
 
+// Tracks warehouse IDs that were explicitly disconnected to prevent auto-reconnect
+const intentionalDisconnects = new Set<string>();
+
 export const useTeamStore = create<TeamState>((set, get) => ({
   company: null,
   invitations: [],
@@ -174,9 +177,10 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         return false;
       }
       const data = await res.json();
+      const companyData = data.company ?? data;
       const company: Company = {
-        companyId: data.companyId,
-        companyName: data.companyName,
+        companyId: companyData.companyId,
+        companyName: companyData.companyName,
         ownerEmail,
         members: [{ email: ownerEmail, name: ownerName, role: "owner", joinedAt: new Date().toISOString(), isActive: true }],
         warehouses: [],
@@ -197,8 +201,9 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           }, 90000);
           if (res2.ok) {
             const data = await res2.json();
+            const companyData2 = data.company ?? data;
             const company: Company = {
-              companyId: data.companyId, companyName: data.companyName, ownerEmail,
+              companyId: companyData2.companyId, companyName: companyData2.companyName, ownerEmail,
               members: [{ email: ownerEmail, name: ownerName, role: "owner", joinedAt: new Date().toISOString(), isActive: true }],
               warehouses: [], userRole: "owner",
             };
@@ -354,19 +359,20 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       const res = await fetchWithTimeout(`${BACKEND}/api/company/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inviteId, userEmail, deviceId }),
+        body: JSON.stringify({ inviteId, email: userEmail, deviceId }),
       });
       if (res.ok) {
         const data = await res.json();
+        const companyId = data.companyId ?? data.company?.companyId;
         set(s => ({
           invitations: (s.invitations || []).filter(i => i.inviteId !== inviteId),
           loading: false,
         }));
-        if (data.companyId) await get().loadCompany(data.companyId, userEmail);
+        if (companyId) await get().loadCompany(companyId, userEmail);
         const profile = await AsyncStorage.getItem("eg-profile-v1");
         if (profile) {
           const p = JSON.parse(profile);
-          p.companyId = data.companyId;
+          p.companyId = companyId;
           p.companyRole = "member";
           await AsyncStorage.setItem("eg-profile-v1", JSON.stringify(p));
         }
@@ -570,6 +576,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
 
   // ── WebSocket ────────────────────────────────────
   connectWebSocket: (warehouseId, email, name, onUpdate) => {
+    intentionalDisconnects.delete(warehouseId);
     const existing = get().wsConnections[warehouseId];
     if (existing && existing.readyState === WebSocket.OPEN) return;
 
@@ -602,7 +609,10 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         return { wsConnections: updated };
       });
       setTimeout(() => {
-        if (get().company) get().connectWebSocket(warehouseId, email, name, onUpdate);
+        // Nur reconnecten wenn intentionalDisconnects diese warehouseId nicht enthält
+        if (get().company && !intentionalDisconnects.has(warehouseId)) {
+          get().connectWebSocket(warehouseId, email, name, onUpdate);
+        }
       }, 3000);
     };
 
@@ -610,6 +620,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   },
 
   disconnectWebSocket: (warehouseId) => {
+    intentionalDisconnects.add(warehouseId);
     const ws = get().wsConnections[warehouseId];
     if (ws) { try { ws.close(); } catch {} }
     set(s => {

@@ -80,20 +80,22 @@ export default function MaterialScreen() {
     if (!name.trim()) { Alert.alert(T.required, T.enterName); return; }
     const data = { name:name.trim(), qty:parseFloat(qty)||0, unit, cat, folderId, min:parseFloat(min)||10, price:parseFloat(price)||0, note, serialNumber:serialNumber.trim(), warrantyDate:warrantyDate.trim() };
     if (isNew) { addMaterial(data); router.back(); }
-    else { updateMaterial(mat!.id, data); setEditing(false); }
+    else if (mat) { updateMaterial(mat.id, data); setEditing(false); }
   };
 
   const handleDelete = () => {
-    Alert.alert(T.delete, `"${mat?.name}" ${T.deleteConfirm}`, [
+    if (!mat) return;
+    Alert.alert(T.delete, `"${mat.name}" ${T.deleteConfirm}`, [
       { text:T.cancel, style:"cancel" },
-      { text:T.delete, style:"destructive", onPress:()=>{ deleteMaterial(mat!.id); router.back(); } },
+      { text:T.delete, style:"destructive", onPress:()=>{ deleteMaterial(mat.id); router.back(); } },
     ]);
   };
 
   const handleApplyQty = () => {
+    if (!mat) return;
     const v = parseFloat(customQty);
     if (isNaN(v)||v<0) return;
-    setQty(mat!.id, Math.round(v));
+    setQty(mat.id, Math.round(v));
     setCustomQty("");
   };
 

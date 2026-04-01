@@ -345,7 +345,9 @@ export const useStore = create<StoreState>((set, get) => ({
     const maxMatId = materials.reduce((max, m) => Math.max(max, m.id), 0) + 1;
     const maxFolderId = folders.reduce((max, f) => Math.max(max, f.id), 0) + 1;
     const maxTaskId = tasks.reduce((max, t) => Math.max(max, t.id), 0) + 1;
-    set({ folders, materials, tasks, suppliers, loans, nextMatId:maxMatId, nextFolderId:maxFolderId, nextTaskId:maxTaskId });
+    const maxSupplierId = suppliers.reduce((max, s) => Math.max(max, s.id), 0) + 1;
+    const maxLoanId = loans.reduce((max, l) => Math.max(max, l.id), 0) + 1;
+    set({ folders, materials, tasks, suppliers, loans, nextMatId:maxMatId, nextFolderId:maxFolderId, nextTaskId:maxTaskId, nextSupplierId:maxSupplierId, nextLoanId:maxLoanId });
     get().saveToStorage();
   },
 }));

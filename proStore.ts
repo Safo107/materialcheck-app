@@ -7,7 +7,7 @@ interface ProState {
   isPro: boolean;
   loaded: boolean;
   load: () => Promise<void>;
-  setPro: (val: boolean) => void;
+  setPro: (val: boolean) => Promise<void>;
 }
 
 export const useProStore = create<ProState>((set) => ({
