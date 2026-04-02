@@ -551,7 +551,9 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         } : null,
       }));
       get().saveTeamData();
-    } catch {}
+    } catch (e) {
+      console.error("[syncWarehouse] Fehler:", e);
+    }
   },
 
   // ── Lager laden ──────────────────────────────────
