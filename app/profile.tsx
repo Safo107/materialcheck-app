@@ -1,5 +1,5 @@
 // app/profile.tsx - Profil komplett
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   TextInput, Alert, Image, ActivityIndicator, Linking, Modal,
@@ -12,7 +12,8 @@ import { useLang, LANGUAGES, t, Language } from "../i18n";
 import { useStore } from "../store";
 import { useTeamStore } from "../teamStore";
 import BottomNav from "../components/BottomNav";
-import { Globe, Building2, User, Pencil, Cloud, Download, Lock, Unlock, AlertTriangle, Mail, Users, Settings, Smartphone, X, KeyRound, Info, LogOut, Warehouse } from "lucide-react-native";
+import { Globe, Building2, User, Pencil, Cloud, Download, Lock, Unlock, AlertTriangle, Mail, Users, Settings, Smartphone, X, KeyRound, Info, LogOut, Warehouse, Crown, Zap, CreditCard } from "lucide-react-native";
+import { useProStore } from "../proStore";
 
 const C = {
   bg:"#0d1117", surface:"#161b22", surface2:"#21262d", surface3:"#2d333b",
@@ -114,6 +115,56 @@ export default function ProfileScreen() {
   const suppliers = _store?.suppliers ?? [];
   const loans = _store?.loans ?? [];
   const restoreFromCloud = _store?.restoreFromCloud;
+
+  // Abo-Status
+  const { isPro, inTrial, trialEndsAt, load: loadPro } = useProStore();
+  const [aboLoading, setAboLoading] = useState(false);
+  const [aboError, setAboError] = useState("");
+
+  const trialDaysLeft = useMemo(() => {
+    if (!inTrial || !trialEndsAt) return 0;
+    const diff = new Date(trialEndsAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }, [inTrial, trialEndsAt]);
+
+  const handleCheckout = async () => {
+    const raw = await AsyncStorage.getItem(PROFILE_KEY).catch(() => null);
+    const p = raw ? JSON.parse(raw) : null;
+    const userEmail = p?.email || "";
+    const deviceId = p?.deviceId || "";
+    if (!userEmail) { setAboError("Bitte zuerst E-Mail im Profil speichern."); return; }
+    setAboLoading(true); setAboError("");
+    try {
+      const res = await fetchWithTimeout(`${BACKEND}/api/stripe/create-checkout-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail, deviceId }),
+      }, 20000);
+      const data = await res.json();
+      if (data.url) { await Linking.openURL(data.url); }
+      else { setAboError(data.detail || "Checkout konnte nicht gestartet werden."); }
+    } catch { setAboError("Netzwerkfehler – Internetverbindung prüfen."); }
+    finally { setAboLoading(false); }
+  };
+
+  const handlePortal = async () => {
+    const raw = await AsyncStorage.getItem(PROFILE_KEY).catch(() => null);
+    const p = raw ? JSON.parse(raw) : null;
+    const userEmail = p?.email || "";
+    if (!userEmail) { setAboError("Kein Profil gefunden."); return; }
+    setAboLoading(true); setAboError("");
+    try {
+      const res = await fetchWithTimeout(`${BACKEND}/api/stripe/create-portal-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: userEmail }),
+      }, 20000);
+      const data = await res.json();
+      if (data.url) { await Linking.openURL(data.url); }
+      else { setAboError(data.detail || "Portal konnte nicht geöffnet werden."); }
+    } catch { setAboError("Netzwerkfehler – Internetverbindung prüfen."); }
+    finally { setAboLoading(false); }
+  };
 
   // isPro nicht mehr benötigt — Sync ist für alle Nutzer kostenlos
 
@@ -997,7 +1048,74 @@ export default function ProfileScreen() {
           </>
         )}
 
-         {/* SPRACHE */}
+        {/* ── ABONNEMENT ────────────────────────────────────────────── */}
+        <View style={{flexDirection:"row",alignItems:"center",gap:6,marginTop:16,marginBottom:10}}>
+          <Crown size={12} color={C.accent}/>
+          <Text style={[s.sectionLabel,{marginBottom:0,marginTop:0,color:C.accent}]}>ABONNEMENT</Text>
+        </View>
+
+        {/* Trial-Banner */}
+        {inTrial && (
+          <View style={{backgroundColor:"rgba(0,198,255,0.08)",borderWidth:0.5,borderColor:"rgba(0,198,255,0.3)",borderRadius:12,padding:14,marginBottom:10,flexDirection:"row",alignItems:"center",gap:10}}>
+            <Zap size={18} color="#00c6ff"/>
+            <View style={{flex:1}}>
+              <Text style={{color:"#00c6ff",fontSize:13,fontWeight:"700"}}>
+                Testphase aktiv — noch {trialDaysLeft} {trialDaysLeft===1?"Tag":"Tage"} kostenlos
+              </Text>
+              <Text style={{color:C.text2,fontSize:11,marginTop:2}}>
+                Danach 19,99 €/Monat · Jederzeit kündbar
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Pro-Status */}
+        {isPro && !inTrial && (
+          <View style={{backgroundColor:"rgba(245,166,35,0.08)",borderWidth:0.5,borderColor:"rgba(245,166,35,0.3)",borderRadius:12,padding:14,marginBottom:10,flexDirection:"row",alignItems:"center",gap:10}}>
+            <Crown size={18} color={C.accent}/>
+            <View style={{flex:1}}>
+              <Text style={{color:C.accent,fontSize:13,fontWeight:"700"}}>MaterialCheck+ aktiv</Text>
+              <Text style={{color:C.text2,fontSize:11,marginTop:2}}>Alle Premium-Features freigeschaltet</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Checkout-Button (Free-User) */}
+        {!isPro && (
+          <TouchableOpacity
+            style={{backgroundColor:"#22c55e",borderRadius:12,paddingVertical:14,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8,opacity:aboLoading?0.7:1}}
+            onPress={handleCheckout} disabled={aboLoading}>
+            {aboLoading ? <ActivityIndicator size="small" color="#000"/> : <Zap size={16} color="#000"/>}
+            <Text style={{color:"#000",fontWeight:"800",fontSize:15}}>
+              {aboLoading ? "Wird gestartet…" : "7 Tage kostenlos testen"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Portal-Button (Pro/Trial-User) */}
+        {isPro && (
+          <TouchableOpacity
+            style={{backgroundColor:C.surface2,borderWidth:0.5,borderColor:C.border2,borderRadius:12,paddingVertical:13,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,marginBottom:8,opacity:aboLoading?0.7:1}}
+            onPress={handlePortal} disabled={aboLoading}>
+            {aboLoading ? <ActivityIndicator size="small" color={C.text}/> : <CreditCard size={16} color={C.text}/>}
+            <Text style={{color:C.text,fontWeight:"600",fontSize:14}}>
+              {aboLoading ? "Wird geöffnet…" : "Abo verwalten"}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Fehler-Meldung */}
+        {aboError ? (
+          <View style={{backgroundColor:"rgba(239,68,68,0.1)",borderRadius:8,borderWidth:0.5,borderColor:"rgba(239,68,68,0.3)",padding:10,marginBottom:8}}>
+            <Text style={{color:"#ef4444",fontSize:12,textAlign:"center"}}>{aboError}</Text>
+          </View>
+        ) : null}
+
+        <Text style={{color:C.text3,fontSize:11,textAlign:"center",marginBottom:4}}>
+          Keine Zahlung heute · Kündigung jederzeit möglich
+        </Text>
+
+        {/* SPRACHE */}
         <View style={{flexDirection:"row",alignItems:"center",gap:6,marginTop:16,marginBottom:10}}><Settings size={12} color={C.text3}/><Text style={[s.sectionLabel,{marginBottom:0,marginTop:0}]}>{T.sectionSettings}</Text></View>
 
         <TouchableOpacity style={[s.actionRow,{borderColor:"rgba(163,113,247,0.3)",backgroundColor:"rgba(163,113,247,0.05)"}]} onPress={()=>setShowLangModal(true)}>
