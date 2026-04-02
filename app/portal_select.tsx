@@ -7,7 +7,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTeamStore } from "../teamStore";
 import { useStore } from "../store";
 import { useLang, t } from "../i18n";
-import { Mail, Building2, Lock, Package, BarChart2, ShoppingCart, Cpu, Users, X, Check, Shield, LogIn, ArrowLeft, KeyRound, UserPlus, Settings } from "lucide-react-native";
+import { Mail, Building2, Lock, Package, BarChart2, ShoppingCart, Cpu, Users, X, Check, Shield, LogIn, ArrowLeft, KeyRound, UserPlus, Settings, Zap, Crown } from "lucide-react-native";
+import { useProStore } from "../proStore";
 
 const BACKEND = "https://materialcheck-backend2.onrender.com";
 
@@ -52,6 +53,9 @@ export default function PortalSelectScreen() {
 
   const members = Array.isArray(company?.members) ? company!.members : [];
   const warehouses = Array.isArray(company?.warehouses) ? company!.warehouses : [];
+
+  const isPro = useProStore(s => s.isPro);
+  const inTrial = useProStore(s => s.inTrial);
 
   const [firmName, setFirmName] = useState("");
   const [userName, setUserName] = useState("");
@@ -227,7 +231,15 @@ export default function PortalSelectScreen() {
                 <Text style={s.logoText}>{userName ? userName.slice(0,2).toUpperCase() : "EG"}</Text>
               </View>
           }
-          <Text style={s.greeting}>{T.welcome || "Willkommen"}{userName ? `, ${userName}` : ""}!</Text>
+          <View style={{ flexDirection:"row", alignItems:"center", gap:8, flexWrap:"wrap", justifyContent:"center" }}>
+            <Text style={s.greeting}>{T.welcome || "Willkommen"}{userName ? `, ${userName}` : ""}!</Text>
+            {isPro && (
+              <View style={{ flexDirection:"row", alignItems:"center", gap:4, paddingHorizontal:8, paddingVertical:3, borderRadius:20, backgroundColor:"rgba(245,166,35,0.15)", borderWidth:1, borderColor:"rgba(245,166,35,0.35)" }}>
+                <Crown size={11} color={C.accent} />
+                <Text style={{ fontSize:10, fontWeight:"700", color:C.accent }}>{inTrial ? "TRIAL" : "PRO"}</Text>
+              </View>
+            )}
+          </View>
           {firmName ? <Text style={s.subGreeting}>{firmName}</Text> : null}
           <Text style={s.question}>Wo möchtest du arbeiten?</Text>
         </View>
@@ -414,14 +426,51 @@ export default function PortalSelectScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* MaterialCheck+ Upgrade Card — nur für Nicht-Pro-User */}
+        {!isPro && firmName ? (
+          <View style={{ borderRadius:20, padding:18, marginBottom:14, backgroundColor:"rgba(245,166,35,0.06)", borderWidth:1.5, borderColor:"rgba(245,166,35,0.35)", position:"relative", overflow:"visible" }}>
+            {/* Empfohlen Badge */}
+            <View style={{ position:"absolute", top:-11, alignSelf:"center", backgroundColor:"#f5a623", paddingHorizontal:12, paddingVertical:3, borderRadius:20, flexDirection:"row", alignItems:"center", gap:4 }}>
+              <Crown size={10} color="#0d1117" />
+              <Text style={{ fontSize:10, fontWeight:"800", color:"#0d1117", letterSpacing:0.5 }}>EMPFOHLEN</Text>
+            </View>
+            <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:12, marginTop:4 }}>
+              <View>
+                <Text style={{ fontSize:16, fontWeight:"800", color:C.text, marginBottom:2 }}>MaterialCheck+</Text>
+                <Text style={{ fontSize:12, color:C.text2 }}>7 Tage kostenlos testen</Text>
+              </View>
+              <View style={{ alignItems:"flex-end" }}>
+                <Text style={{ fontSize:22, fontWeight:"800", color:C.accent }}>19,99 €</Text>
+                <Text style={{ fontSize:11, color:C.text3 }}>/Monat</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection:"row", flexWrap:"wrap", gap:8, marginBottom:14 }}>
+              {["Unbegrenzte Projekte","PDF-Export","Statistiken","Sync & Backup","Team-Features"].map(f => (
+                <View key={f} style={{ flexDirection:"row", alignItems:"center", gap:4, paddingHorizontal:8, paddingVertical:3, borderRadius:12, backgroundColor:"rgba(245,166,35,0.1)", borderWidth:1, borderColor:"rgba(245,166,35,0.2)" }}>
+                  <Check size={10} color={C.accent} />
+                  <Text style={{ fontSize:10, color:C.accent }}>{f}</Text>
+                </View>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor:C.accent, borderRadius:14, paddingVertical:13, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:8 }}
+              onPress={() => router.push("/profile")}
+            >
+              <Zap size={15} color="#0d1117" />
+              <Text style={{ fontWeight:"800", fontSize:14, color:"#0d1117" }}>Jetzt 7 Tage kostenlos testen</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize:10, color:C.text3, textAlign:"center", marginTop:8 }}>Danach 19,99 €/Monat · Jederzeit kündbar</Text>
+          </View>
+        ) : null}
+
         {/* FOOTER — nur auf Web */}
         {isWeb && (
           <View style={s.footer}>
-            <TouchableOpacity onPress={() => Linking.openURL("https://app.elektrogenius.de/impressum.html")}>
+            <TouchableOpacity onPress={() => Linking.openURL("https://materialcheck.elektrogenius.de/impressum.html")}>
               <Text style={s.footerLink}>Impressum</Text>
             </TouchableOpacity>
             <Text style={s.footerDot}>·</Text>
-            <TouchableOpacity onPress={() => Linking.openURL("https://app.elektrogenius.de/datenschutz-app.html")}>
+            <TouchableOpacity onPress={() => Linking.openURL("https://materialcheck.elektrogenius.de/datenschutz-app.html")}>
               <Text style={s.footerLink}>Datenschutz</Text>
             </TouchableOpacity>
             <Text style={s.footerDot}>·</Text>
@@ -445,7 +494,7 @@ export default function PortalSelectScreen() {
             <Text style={s.cookieText}>
               Diese Web-App verwendet notwendige Cookies für die Funktionalität (Profil, Sync). Weitere Informationen in unserer{" "}
               <Text style={s.cookieLinkText}
-                onPress={() => Linking.openURL("https://app.elektrogenius.de/datenschutz-app.html")}>
+                onPress={() => Linking.openURL("https://materialcheck.elektrogenius.de/datenschutz-app.html")}>
                 Datenschutzerklärung
               </Text>.
             </Text>
