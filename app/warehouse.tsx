@@ -288,35 +288,44 @@ export default function WarehouseScreen() {
     low:    { label:"Niedrig", color:C.green },
   };
 
-  // ── Excel-Export (nur Web, nur Pro/Trial) ─────────
-  const exportExcel = () => {
+  // ── Excel-Export .xlsx (nur Web, nur Pro/Trial) ───
+  const exportExcel = async () => {
     if (Platform.OS !== "web" || typeof document === "undefined") return;
-    const BOM = "\uFEFF";
-    const header = ["Materialname", "Menge", "Einheit", "Mindestmenge", "Preis (€/Stk)", "Gesamtwert (€)", "Status"].join(";");
-    const rows = materials.map(m => {
-      const qty = m.qty ?? 0;
-      const price = m.price ?? 0;
-      const status = qty === 0 ? "Leer" : qty < (m.min ?? 0) ? "Niedrig" : "OK";
-      return [
-        `"${(m.name ?? "").replace(/"/g, '""')}"`,
-        qty,
-        `"${m.unit ?? ""}"`,
-        m.min ?? 0,
-        price > 0 ? price.toFixed(2) : "",
-        price > 0 ? (qty * price).toFixed(2) : "",
-        status,
-      ].join(";");
-    });
-    const csv = BOM + [header, ...rows].join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${warehouseName || "Lager"}_Materialliste.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    try {
+      const XLSX = await import("xlsx");
+      const rows = materials.map(m => {
+        const qty = m.qty ?? 0;
+        const price = m.price ?? 0;
+        return {
+          "Materialname":     m.name ?? "",
+          "Menge":            qty,
+          "Einheit":          m.unit ?? "",
+          "Mindestmenge":     m.min ?? 0,
+          "Preis (€/Stk)":    price > 0 ? price : "",
+          "Gesamtwert (€)":   price > 0 ? parseFloat((qty * price).toFixed(2)) : "",
+          "Status":           qty === 0 ? "Leer" : qty < (m.min ?? 0) ? "Niedrig" : "OK",
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      // Column widths
+      ws["!cols"] = [{ wch:28 }, { wch:8 }, { wch:10 }, { wch:14 }, { wch:14 }, { wch:16 }, { wch:10 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, warehouseName || "Lager");
+      const dateStr = new Date().toLocaleDateString("de-DE").replace(/\./g, "-");
+      XLSX.writeFile(wb, `${warehouseName || "Lager"}_Materialliste_${dateStr}.xlsx`);
+    } catch {
+      // Fallback: CSV mit BOM für ältere Geräte
+      const BOM = "\uFEFF";
+      const header = ["Materialname","Menge","Einheit","Mindestmenge","Preis (€/Stk)","Gesamtwert (€)","Status"].join(";");
+      const rows = materials.map(m => {
+        const qty = m.qty ?? 0; const price = m.price ?? 0;
+        return [`"${(m.name??"").replace(/"/g,'""')}"`,qty,`"${m.unit??""}"`,m.min??0,price>0?price.toFixed(2):"",price>0?(qty*price).toFixed(2):"",qty===0?"Leer":qty<(m.min??0)?"Niedrig":"OK"].join(";");
+      });
+      const blob = new Blob([BOM+[header,...rows].join("\r\n")],{type:"text/csv;charset=utf-8;"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href=url; a.download=`${warehouseName||"Lager"}_Materialliste.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
   };
 
   if (loading) {
@@ -466,7 +475,7 @@ export default function WarehouseScreen() {
             >
               <FileDown size={20} color={C.accent} />
               <View style={{ flex:1 }}>
-                <Text style={{ fontSize:13, fontWeight:"700", color:C.accent }}>Materialliste als Excel exportieren</Text>
+                <Text style={{ fontSize:13, fontWeight:"700", color:C.accent }}>Materialliste exportieren (.xlsx)</Text>
                 <Text style={{ fontSize:11, color:C.text3, marginTop:2 }}>Pro-Feature · 7 Tage kostenlos testen</Text>
               </View>
               <Crown size={16} color={C.accent} />

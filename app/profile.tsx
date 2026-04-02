@@ -127,6 +127,16 @@ export default function ProfileScreen() {
     return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
   }, [inTrial, trialEndsAt]);
 
+  const trialEndBerlin = useMemo(() => {
+    if (!trialEndsAt) return null;
+    try {
+      return new Date(trialEndsAt).toLocaleDateString("de-DE", {
+        timeZone: "Europe/Berlin",
+        day: "2-digit", month: "2-digit", year: "numeric",
+      });
+    } catch { return null; }
+  }, [trialEndsAt]);
+
   const handleCheckout = async () => {
     const raw = await AsyncStorage.getItem(PROFILE_KEY).catch(() => null);
     const p = raw ? JSON.parse(raw) : null;
@@ -1063,7 +1073,7 @@ export default function ProfileScreen() {
                 Testphase aktiv — noch {trialDaysLeft} {trialDaysLeft===1?"Tag":"Tage"} kostenlos
               </Text>
               <Text style={{color:C.text2,fontSize:11,marginTop:2}}>
-                Danach 19,99 €/Monat · Jederzeit kündbar
+                {trialEndBerlin ? `Endet am ${trialEndBerlin} (Berliner Zeit)` : "Danach 19,99 €/Monat · Jederzeit kündbar"}
               </Text>
             </View>
           </View>
