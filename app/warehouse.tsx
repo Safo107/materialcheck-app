@@ -2,15 +2,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator, Platform, Linking,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTeamStore } from "../teamStore";
+import { useProStore } from "../proStore";
 import {
   Warehouse, Package, ArrowLeft, Plus, Trash2, AlertTriangle,
   RotateCcw, ListChecks, Activity, CheckCircle, Pencil, Check, X,
+  FileDown, Crown,
 } from "lucide-react-native";
 
 const C = {
@@ -27,6 +29,8 @@ export default function WarehouseScreen() {
   const insets = useSafeAreaInsets();
   const bottomPad = insets.bottom > 0 ? insets.bottom : 12;
   const { company, activeUsers, connectWebSocket, disconnectWebSocket, syncWarehouse, loadWarehouse, sendMaterialChange } = useTeamStore();
+  const isPro = useProStore(s => s.isPro);
+  const inTrial = useProStore(s => s.inTrial);
 
   const [materials, setMaterials] = useState<any[]>([]);
   const [tasks, setTasks]         = useState<any[]>([]);
@@ -284,6 +288,37 @@ export default function WarehouseScreen() {
     low:    { label:"Niedrig", color:C.green },
   };
 
+  // ── Excel-Export (nur Web, nur Pro/Trial) ─────────
+  const exportExcel = () => {
+    if (Platform.OS !== "web" || typeof document === "undefined") return;
+    const BOM = "\uFEFF";
+    const header = ["Materialname", "Menge", "Einheit", "Mindestmenge", "Preis (€/Stk)", "Gesamtwert (€)", "Status"].join(";");
+    const rows = materials.map(m => {
+      const qty = m.qty ?? 0;
+      const price = m.price ?? 0;
+      const status = qty === 0 ? "Leer" : qty < (m.min ?? 0) ? "Niedrig" : "OK";
+      return [
+        `"${(m.name ?? "").replace(/"/g, '""')}"`,
+        qty,
+        `"${m.unit ?? ""}"`,
+        m.min ?? 0,
+        price > 0 ? price.toFixed(2) : "",
+        price > 0 ? (qty * price).toFixed(2) : "",
+        status,
+      ].join(";");
+    });
+    const csv = BOM + [header, ...rows].join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${warehouseName || "Lager"}_Materialliste.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={s.container} edges={["top","left","right"]}>
@@ -309,6 +344,14 @@ export default function WarehouseScreen() {
           <Text style={s.headerTitle} numberOfLines={1}>{warehouseName || "Lager"}</Text>
           <Text style={s.headerSub}>{materials.length} Mat. · {userRole==="readonly"?" Lesen":" Bearbeiten"}{syncing?" · Sync...":""}</Text>
         </View>
+        {(isPro || inTrial) && activeTab === "materials" && Platform.OS === "web" && materials.length > 0 && (
+          <TouchableOpacity
+            style={[s.addBtn, { backgroundColor:"rgba(63,185,80,0.2)", borderColor:"rgba(63,185,80,0.4)", marginRight:6 }]}
+            onPress={exportExcel}
+          >
+            <FileDown size={17} color={C.green} />
+          </TouchableOpacity>
+        )}
         {canEdit && (
           <TouchableOpacity style={s.addBtn} onPress={() => activeTab==="tasks" ? setShowAddTask(true) : setShowAddMat(true)}>
             <Plus size={18} color={C.text} />
@@ -414,6 +457,22 @@ export default function WarehouseScreen() {
               </TouchableOpacity>
             );
           })}
+
+          {/* Excel-Export Banner: Pro-Hinweis für Nicht-Pro-Nutzer auf Web */}
+          {!isPro && !inTrial && Platform.OS === "web" && materials.length > 0 && (
+            <TouchableOpacity
+              style={{ flexDirection:"row", alignItems:"center", gap:10, margin:12, padding:14, borderRadius:16, backgroundColor:"rgba(245,166,35,0.08)", borderWidth:1, borderColor:"rgba(245,166,35,0.25)" }}
+              onPress={() => router.push("/profile")}
+            >
+              <FileDown size={20} color={C.accent} />
+              <View style={{ flex:1 }}>
+                <Text style={{ fontSize:13, fontWeight:"700", color:C.accent }}>Materialliste als Excel exportieren</Text>
+                <Text style={{ fontSize:11, color:C.text3, marginTop:2 }}>Pro-Feature · 7 Tage kostenlos testen</Text>
+              </View>
+              <Crown size={16} color={C.accent} />
+            </TouchableOpacity>
+          )}
+
         </ScrollView>
       )}
 
