@@ -886,7 +886,7 @@ export default function ProfileScreen() {
               {profile.companyRole && (
                 <View style={[s.pinBadge,{backgroundColor:"rgba(79,163,247,0.15)"}]}>
                   <Text style={[s.pinBadgeText,{color:C.blue}]}>
-                    {profile.companyRole==="owner" ? T.roleOwner : profile.companyRole==="admin" ? T.roleAdmin : T.roleMember}
+                    {profile.companyRole==="owner" ? "Inhaber" : profile.companyRole==="admin" ? "Admin" : "Mitarbeiter"}
                   </Text>
                 </View>
               )}
@@ -1011,8 +1011,8 @@ export default function ProfileScreen() {
               <View style={{flex:1}}>
                 <Text style={s.actionTitle}>{company.companyName}</Text>
                 <Text style={s.actionSub}>
-                  {company.members?.length??0} {T.roleMember}s · {warehouses.length} {T.folders} ·{" "}
-                  {profile.companyRole==="owner"?T.roleOwner:profile.companyRole==="admin"?T.roleAdmin:T.roleMember}
+                  {company.members?.length??0} {(company.members?.length??0)===1?"Mitglied":"Mitglieder"} · {warehouses.length} {T.folders} ·{" "}
+                  {profile.companyRole==="owner"?"Inhaber":profile.companyRole==="admin"?"Admin":"Mitarbeiter"}
                 </Text>
               </View>
             </View>
@@ -1034,7 +1034,7 @@ export default function ProfileScreen() {
               <Users size={20} color={C.blue}/>
               <View style={{flex:1}}>
                 <Text style={[s.actionTitle,{color:C.blue}]}>{T.manageTeam}</Text>
-                <Text style={s.actionSub}>{company.members?.length??0} {T.roleMember}s</Text>
+                <Text style={s.actionSub}>{company.members?.length??0} {(company.members?.length??0)===1?"Mitglied":"Mitglieder"}</Text>
               </View>
               <Text style={{color:C.text3}}>›</Text>
             </TouchableOpacity>
