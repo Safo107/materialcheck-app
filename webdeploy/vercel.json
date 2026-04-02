@@ -1,0 +1,15 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "(?!materialcheck\\.elektrogenius\\.de).*\\.vercel\\.app"
+        }
+      ],
+      "destination": "https://materialcheck.elektrogenius.de/$1",
+      "permanent": true
+    }
+  ]
+}
