@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Alert, Image, ActivityIndicator, Linking, Modal,
+  TextInput, Image, ActivityIndicator, Linking, Modal,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -12,7 +12,7 @@ import { useLang, LANGUAGES, t, Language } from "../i18n";
 import { useStore } from "../store";
 import { useTeamStore } from "../teamStore";
 import BottomNav from "../components/BottomNav";
-import { Globe, Building2, User, Pencil, Cloud, Download, Lock, Unlock, AlertTriangle, Mail, Users, Settings, Smartphone, X, KeyRound, Info, LogOut, Warehouse, Crown, Zap, CreditCard } from "lucide-react-native";
+import { Globe, Building2, User, Pencil, Cloud, Download, Lock, Unlock, AlertTriangle, Mail, Users, Settings, Smartphone, X, KeyRound, Info, LogOut, Warehouse, Crown, Zap, CreditCard, Check } from "lucide-react-native";
 import { useProStore } from "../proStore";
 
 const C = {
@@ -228,6 +228,7 @@ export default function ProfileScreen() {
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [companyNameInput, setCompanyNameInput] = useState("");
   const [creatingCompany, setCreatingCompany] = useState(false);
+  const [showTeamPaywall, setShowTeamPaywall] = useState(false);
 
   // Firma auflösen
   const [showDissolveModal, setShowDissolveModal] = useState(false);
@@ -361,11 +362,11 @@ export default function ProfileScreen() {
         return true;
       }
       setCheckingEmail(false);
-      Alert.alert("Fehler", "Email-Prüfung fehlgeschlagen. Bitte erneut versuchen.");
+      setInfoTitle("Fehler"); setInfoText("Email-Prüfung fehlgeschlagen. Bitte erneut versuchen."); setInfoModal(true);
       return false;
     } catch (err: any) {
       setCheckingEmail(false);
-      Alert.alert("Keine Verbindung", "Server nicht erreichbar. Bitte Internetverbindung prüfen und nochmal versuchen.");
+      setInfoTitle("Keine Verbindung"); setInfoText("Server nicht erreichbar. Bitte Internetverbindung prüfen und nochmal versuchen."); setInfoModal(true);
       return false;
     }
   };
@@ -408,7 +409,7 @@ export default function ProfileScreen() {
 
   // ── Speichern ────────────────────────────────────
   const handleSave = async () => {
-    if (!firmName.trim()) { Alert.alert(T.required, T.enterName); return; }
+    if (!firmName.trim()) { setInfoTitle(T.required); setInfoText(T.enterName); setInfoModal(true); return; }
     const ok = await checkEmailBeforeSave();
     if (ok) doSave(email.trim().toLowerCase());
   };
@@ -433,7 +434,7 @@ export default function ProfileScreen() {
       setEditing(false);
       syncProfileToCloud(p);
     } catch {
-      Alert.alert("Fehler", "Speichern fehlgeschlagen");
+      setInfoTitle("Fehler"); setInfoText("Speichern fehlgeschlagen"); setInfoModal(true);
     }
     finally { setSaving(false); }
   };
@@ -470,8 +471,8 @@ export default function ProfileScreen() {
 
   // ── Materialien Sync ─────────────────────────────
   const syncMaterialsToCloud = async () => {
-    if (!profile.email) { Alert.alert("Fehler","Bitte zuerst Email eingeben"); return; }
-    if (!hasCloudPin) { Alert.alert("Fehler","Bitte zuerst Cloud-PIN festlegen"); return; }
+    if (!profile.email) { setInfoTitle("Fehler"); setInfoText("Bitte zuerst Email eingeben"); setInfoModal(true); return; }
+    if (!hasCloudPin) { setInfoTitle("Fehler"); setInfoText("Bitte zuerst Cloud-PIN festlegen"); setInfoModal(true); return; }
     setMatSyncing(true); setMatSyncStatus("none"); setMatSyncMsg("Wird hochgeladen...");
     try {
       const deviceId = await getOrCreateDeviceId();
@@ -508,9 +509,9 @@ export default function ProfileScreen() {
           syncProfileToCloud(profile, newPin);
           setHasCloudPin(true);
           setNewPin(""); setConfirmPin(""); setCloudPinStep("set");
-          Alert.alert("PIN gesetzt!", "Dein Cloud-PIN ist aktiv.");
+          setInfoTitle("PIN gesetzt!"); setInfoText("Dein Cloud-PIN ist aktiv."); setInfoModal(true);
         } else {
-          Alert.alert("PINs stimmen nicht überein");
+          setInfoTitle("Fehler"); setInfoText("PINs stimmen nicht überein"); setInfoModal(true);
           setCloudPinStep("set"); setNewPin(""); setConfirmPin("");
         }
       }
@@ -691,9 +692,9 @@ export default function ProfileScreen() {
           AsyncStorage.setItem(APP_PIN_KEY, appPinInput);
           AsyncStorage.setItem(APP_LOCK_KEY, "true");
           setAppPin(appPinInput); setAppLockEnabled(true); setShowAppPinModal(false);
-          Alert.alert("App-Sperre aktiv!");
+          setInfoTitle("App-Sperre aktiv!"); setInfoText("Deine App ist jetzt geschützt."); setInfoModal(true);
         } else {
-          Alert.alert("PINs stimmen nicht");
+          setInfoTitle("Fehler"); setInfoText("PINs stimmen nicht"); setInfoModal(true);
           setAppPinStep("set"); setAppPinInput(""); setAppPinConfirm("");
         }
       }
@@ -704,9 +705,9 @@ export default function ProfileScreen() {
           AsyncStorage.removeItem(APP_PIN_KEY);
           AsyncStorage.setItem(APP_LOCK_KEY, "false");
           setAppPin(""); setAppLockEnabled(false); setShowAppPinModal(false);
-          Alert.alert("App-Sperre deaktiviert");
+          setInfoTitle("App-Sperre deaktiviert"); setInfoText("Die Sperre wurde aufgehoben."); setInfoModal(true);
         } else {
-          Alert.alert("Falscher PIN"); setAppPinInput("");
+          setInfoTitle("Falscher PIN"); setInfoText("Bitte erneut versuchen."); setInfoModal(true); setAppPinInput("");
         }
       }
     }
@@ -784,7 +785,7 @@ export default function ProfileScreen() {
   };
   const pickLogo = async () => {
     const {status} = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status!=="granted") { Alert.alert("Fehler","Berechtigung fehlt"); return; }
+    if (status!=="granted") { setInfoTitle("Fehler"); setInfoText("Berechtigung fehlt"); setInfoModal(true); return; }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true, aspect:[1,1], quality:0.5,
@@ -996,7 +997,10 @@ export default function ProfileScreen() {
 
         {!company ? (
           <TouchableOpacity style={[s.actionRow,{borderColor:"rgba(245,166,35,0.5)",backgroundColor:"rgba(245,166,35,0.08)"}]}
-            onPress={()=>{setCompanyNameInput(profile.firmName||"");setShowCompanyModal(true);}}>
+            onPress={()=>{
+              if (!isPro && !inTrial) { setShowTeamPaywall(true); return; }
+              setCompanyNameInput(profile.firmName||""); setShowCompanyModal(true);
+            }}>
             <Building2 size={20} color={C.accent}/>
             <View style={{flex:1}}>
               <Text style={[s.actionTitle,{color:C.accent}]}>{T.createCompany}</Text>
@@ -1419,6 +1423,60 @@ export default function ProfileScreen() {
             <TouchableOpacity style={[s.btnPrimary,{backgroundColor:C.accent}]} onPress={()=>setInfoModal(false)}>
               <Text style={s.btnPrimaryText}>OK</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TEAM PAYWALL */}
+      <Modal visible={showTeamPaywall} transparent animationType="fade">
+        <View style={[s.modalOverlay,{justifyContent:"center",paddingHorizontal:24}]}>
+          <View style={{backgroundColor:C.surface,borderRadius:20,overflow:"hidden",borderWidth:0.5,borderColor:C.border2}}>
+            <View style={{backgroundColor:"rgba(245,166,35,0.12)",borderBottomWidth:0.5,borderBottomColor:"rgba(245,166,35,0.25)",padding:24,alignItems:"center"}}>
+              <View style={{width:64,height:64,borderRadius:32,backgroundColor:"rgba(245,166,35,0.18)",borderWidth:1.5,borderColor:"rgba(245,166,35,0.5)",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+                <Crown size={32} color={C.accent}/>
+              </View>
+              <Text style={{fontSize:20,fontWeight:"800",color:C.text,marginBottom:4}}>Team-Funktion</Text>
+              <View style={{flexDirection:"row",alignItems:"center",gap:4,backgroundColor:"rgba(245,166,35,0.2)",paddingHorizontal:10,paddingVertical:3,borderRadius:20}}>
+                <Text style={{fontSize:11,fontWeight:"800",color:C.accent,letterSpacing:0.8}}>MATERIALCHECK+ ERFORDERLICH</Text>
+              </View>
+            </View>
+            <View style={{padding:20}}>
+              <Text style={{fontSize:13,color:C.text2,textAlign:"center",marginBottom:16,lineHeight:20}}>
+                Das Firmen Portal ist Teil von MaterialCheck+.{"\n"}Nur der Chef braucht Pro — Mitarbeiter können kostenlos eingeladen werden.
+              </Text>
+              {[
+                {icon:"👥", text:"Mitarbeiter einladen & verwalten"},
+                {icon:"🏭", text:"Gemeinsame Lager in Echtzeit"},
+                {icon:"📊", text:"Team-Statistiken & Übersicht"},
+                {icon:"🔔", text:"Push-Benachrichtigungen"},
+                {icon:"📁", text:"Unbegrenzte Lager & Projekte"},
+              ].map(f=>(
+                <View key={f.text} style={{flexDirection:"row",alignItems:"center",gap:10,paddingVertical:7,borderBottomWidth:0.5,borderBottomColor:"rgba(255,255,255,0.05)"}}>
+                  <Text style={{fontSize:16}}>{f.icon}</Text>
+                  <Text style={{fontSize:13,color:C.text2,flex:1}}>{f.text}</Text>
+                  <Check size={14} color={C.accent}/>
+                </View>
+              ))}
+              <View style={{flexDirection:"row",justifyContent:"space-between",alignItems:"center",marginTop:16,marginBottom:16}}>
+                <View>
+                  <Text style={{fontSize:11,color:C.text3}}>7 Tage kostenlos testen</Text>
+                  <Text style={{fontSize:11,color:C.text3}}>Danach jederzeit kündbar</Text>
+                </View>
+                <View style={{alignItems:"flex-end"}}>
+                  <Text style={{fontSize:24,fontWeight:"800",color:C.accent}}>19,99 €</Text>
+                  <Text style={{fontSize:11,color:C.text3}}>/Monat</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={{backgroundColor:C.accent,borderRadius:14,paddingVertical:14,alignItems:"center",marginBottom:10,opacity:aboLoading?0.7:1}}
+                onPress={async()=>{ setShowTeamPaywall(false); await handleCheckout(); }}
+                disabled={aboLoading}>
+                <Text style={{fontWeight:"800",fontSize:15,color:"#0d1117"}}>7 Tage kostenlos starten →</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{paddingVertical:10,alignItems:"center"}} onPress={()=>setShowTeamPaywall(false)}>
+                <Text style={{fontSize:13,color:C.text3}}>Später</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

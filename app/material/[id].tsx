@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, Alert, Modal, KeyboardAvoidingView, Platform,
+  TextInput, Modal, KeyboardAvoidingView, Platform,
   Share,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -59,6 +59,9 @@ export default function MaterialScreen() {
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
   const [showProGate, setShowProGate] = useState(false);
+  const [infoModalVisible, setInfoModalVisible] = useState(false);
+  const [infoModalMsg, setInfoModalMsg] = useState("");
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
   const CATEGORIES: { value:Category; label:string }[] = [
     { value:"kabel", label:T.cable },{ value:"sicherung", label:T.fuse },
@@ -77,7 +80,7 @@ export default function MaterialScreen() {
   }, [id]);
 
   const handleSave = () => {
-    if (!name.trim()) { Alert.alert(T.required, T.enterName); return; }
+    if (!name.trim()) { setInfoModalMsg(`${T.required}: ${T.enterName}`); setInfoModalVisible(true); return; }
     const data = { name:name.trim(), qty:parseFloat(qty)||0, unit, cat, folderId, min:parseFloat(min)||10, price:parseFloat(price)||0, note, serialNumber:serialNumber.trim(), warrantyDate:warrantyDate.trim() };
     if (isNew) { addMaterial(data); router.back(); }
     else if (mat) { updateMaterial(mat.id, data); setEditing(false); }
@@ -85,10 +88,7 @@ export default function MaterialScreen() {
 
   const handleDelete = () => {
     if (!mat) return;
-    Alert.alert(T.delete, `"${mat.name}" ${T.deleteConfirm}`, [
-      { text:T.cancel, style:"cancel" },
-      { text:T.delete, style:"destructive", onPress:()=>{ deleteMaterial(mat.id); router.back(); } },
-    ]);
+    setDeleteConfirmVisible(true);
   };
 
   const handleApplyQty = () => {
@@ -396,6 +396,37 @@ export default function MaterialScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* INFO MODAL */}
+      <Modal visible={infoModalVisible} transparent animationType="fade">
+        <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.75)", alignItems:"center", justifyContent:"center" }}>
+          <View style={{ width:"85%", maxWidth:320, backgroundColor:C.surface, borderRadius:14, padding:20, borderWidth:0.5, borderColor:"rgba(255,255,255,0.14)", alignItems:"center" }}>
+            <Text style={{ fontSize:13, color:C.text2, marginBottom:16, lineHeight:20, textAlign:"center" }}>{infoModalMsg}</Text>
+            <TouchableOpacity style={{ backgroundColor:C.surface2, borderRadius:8, paddingVertical:10, paddingHorizontal:24 }} onPress={()=>setInfoModalVisible(false)}>
+              <Text style={{ color:C.text, fontWeight:"600" }}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* DELETE CONFIRM MODAL */}
+      <Modal visible={deleteConfirmVisible} transparent animationType="fade">
+        <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.75)", alignItems:"center", justifyContent:"center" }}>
+          <View style={{ width:"85%", maxWidth:320, backgroundColor:C.surface, borderRadius:14, padding:20, borderWidth:0.5, borderColor:"rgba(255,255,255,0.14)" }}>
+            <Text style={{ fontSize:15, fontWeight:"700", color:C.text, marginBottom:8 }}>{T.delete}</Text>
+            <Text style={{ fontSize:13, color:C.text2, marginBottom:20, lineHeight:20 }}>"{mat?.name}" {T.deleteConfirm}</Text>
+            <View style={{ flexDirection:"row", gap:10 }}>
+              <TouchableOpacity style={{ flex:1, backgroundColor:C.surface2, borderRadius:8, padding:12, alignItems:"center" }} onPress={()=>setDeleteConfirmVisible(false)}>
+                <Text style={{ color:C.text2, fontWeight:"600" }}>{T.cancel}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex:1, backgroundColor:"rgba(248,81,73,0.15)", borderWidth:0.5, borderColor:"rgba(248,81,73,0.3)", borderRadius:8, padding:12, alignItems:"center" }}
+                onPress={()=>{ if(mat){ deleteMaterial(mat.id); router.back(); } }}>
+                <Text style={{ color:"#f85149", fontWeight:"700" }}>{T.delete}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

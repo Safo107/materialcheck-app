@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, Alert, SafeAreaView, KeyboardAvoidingView, Platform,
+  Modal, TextInput, SafeAreaView, KeyboardAvoidingView, Platform,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -99,6 +99,8 @@ export default function FolderScreen() {
   const [matMin, setMatMin] = useState("10");
   const [matPrice, setMatPrice] = useState("0");
   const [matNote, setMatNote] = useState("");
+  const [infoModalVisible, setInfoModalVisible] = useState(false);
+  const [infoModalMsg, setInfoModalMsg] = useState("");
 
   const CATEGORIES: { value: Category; label: string }[] = [
     { value: "kabel", label: T.cable }, { value: "sicherung", label: T.fuse },
@@ -119,7 +121,7 @@ export default function FolderScreen() {
   };
 
   const saveAdd = () => {
-    if (!matName.trim()) { Alert.alert(T.required, T.enterName); return; }
+    if (!matName.trim()) { setInfoModalMsg(`${T.required}: ${T.enterName}`); setInfoModalVisible(true); return; }
     addMaterial({
       name: matName.trim(), qty: parseFloat(matQty) || 0,
       unit: matUnit, cat: matCat, folderId,
@@ -370,6 +372,18 @@ export default function FolderScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* INFO MODAL */}
+      <Modal visible={infoModalVisible} transparent animationType="fade">
+        <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.75)", alignItems:"center", justifyContent:"center" }}>
+          <View style={{ width:"85%", maxWidth:320, backgroundColor:C.surface, borderRadius:14, padding:20, borderWidth:0.5, borderColor:"rgba(255,255,255,0.14)", alignItems:"center" }}>
+            <Text style={{ fontSize:13, color:"#8b949e", marginBottom:16, lineHeight:20, textAlign:"center" }}>{infoModalMsg}</Text>
+            <TouchableOpacity style={{ backgroundColor:C.surface2, borderRadius:8, paddingVertical:10, paddingHorizontal:24 }} onPress={()=>setInfoModalVisible(false)}>
+              <Text style={{ color:"#e6edf3", fontWeight:"600" }}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );

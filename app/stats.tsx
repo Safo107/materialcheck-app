@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Linking, Share,
+  Linking, Share,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -19,7 +19,7 @@ function webDownload(content: string, filename: string, mimeType: string) {
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
-  } catch(e) { Alert.alert("Fehler", String(e)); }
+  } catch(e) { console.error("Download-Fehler:", e); }
 }
 
 const C = {
@@ -70,7 +70,7 @@ export default function StatsScreen() {
       const state = useStore.getState();
       const data = JSON.stringify({ folders:state.folders, materials:state.materials, exportDate:new Date().toISOString() }, null, 2);
       webDownload(data, `materialcheck-${new Date().toISOString().slice(0,10)}.json`, "application/json");
-    } catch(e) { Alert.alert("Fehler", String(e)); }
+    } catch(e) { console.error("Export-Fehler:", e); }
   };
 
   const shareApp = async () => {

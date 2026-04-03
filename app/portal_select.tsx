@@ -144,6 +144,9 @@ export default function PortalSelectScreen() {
   // ── Cookie Banner ────────────────────────────────
   const [showCookieBanner, setShowCookieBanner] = useState(false);
 
+  // ── Pro Gate Modal ───────────────────────────────
+  const [showProModal, setShowProModal] = useState(false);
+
   // ── Confirm Dialog State ─────────────────────────
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmInviteId, setConfirmInviteId] = useState("");
@@ -175,8 +178,14 @@ export default function PortalSelectScreen() {
           setTimeout(() => router.replace("/private"), 100);
           return;
         } else if (lastPortal === "company") {
-          setTimeout(() => router.replace("/company"), 100);
-          return;
+          // Auto-Route nur wenn bereits Firmenmitglied (company wird geladen) oder Pro
+          const proRaw = await AsyncStorage.getItem("eg-pro-status");
+          const proData = proRaw ? JSON.parse(proRaw) : null;
+          const hasProAccess = proData?.isPro || proData?.inTrial || !!p?.companyId;
+          if (hasProAccess) {
+            setTimeout(() => router.replace("/company"), 100);
+            return;
+          }
         }
       }
       // Cookie Banner nur auf Web anzeigen
@@ -380,20 +389,37 @@ export default function PortalSelectScreen() {
 
         {/* FIRMEN PORTAL */}
         <TouchableOpacity
-          style={[s.card, { borderColor:"rgba(245,166,35,0.3)" }]}
-          onPress={async () => { await AsyncStorage.setItem("eg-last-portal","company"); router.push("/company"); }}>
+          style={[s.card, { borderColor: (isPro || inTrial || company) ? "rgba(245,166,35,0.3)" : "rgba(255,255,255,0.08)" }]}
+          onPress={async () => {
+            if (isPro || inTrial || company) {
+              await AsyncStorage.setItem("eg-last-portal","company");
+              router.push("/company");
+            } else {
+              setShowProModal(true);
+            }
+          }}>
           <View style={s.cardTop}>
-            <View style={[s.cardIcon, { backgroundColor:"rgba(245,166,35,0.15)" }]}>
-              <Building2 size={38} color={C.accent} />
+            <View style={[s.cardIcon, { backgroundColor: (isPro || inTrial || company) ? "rgba(245,166,35,0.15)" : "rgba(255,255,255,0.05)" }]}>
+              <Building2 size={38} color={(isPro || inTrial || company) ? C.accent : C.text3} />
             </View>
             <View style={{ flex:1 }}>
-              <Text style={s.cardTitle}>
-                {company ? company.companyName : "Firmen Portal"}
-              </Text>
+              <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+                <Text style={[s.cardTitle, { color: (isPro || inTrial || company) ? C.text : C.text3 }]}>
+                  {company ? company.companyName : "Firmen Portal"}
+                </Text>
+                {!(isPro || inTrial || company) && (
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:3, backgroundColor:"rgba(245,166,35,0.15)", paddingHorizontal:7, paddingVertical:2, borderRadius:20, borderWidth:0.5, borderColor:"rgba(245,166,35,0.35)" }}>
+                    <Crown size={9} color={C.accent} />
+                    <Text style={{ fontSize:9, fontWeight:"800", color:C.accent, letterSpacing:0.5 }}>PRO</Text>
+                  </View>
+                )}
+              </View>
               <Text style={s.cardSub}>
                 {company
                   ? `${members.length} Mitglieder · ${warehouses.length} Lager`
-                  : "Firma erstellen oder Einladung annehmen"}
+                  : (isPro || inTrial)
+                    ? "Firma erstellen oder Einladung annehmen"
+                    : "MaterialCheck+ für Team-Funktionen"}
               </Text>
             </View>
           </View>
@@ -421,9 +447,21 @@ export default function PortalSelectScreen() {
           {company && (
             <Text style={s.adminNote}>Statistik & Einkauf nur für Chef & Admin</Text>
           )}
-          <View style={[s.btn, { backgroundColor:"rgba(245,166,35,0.15)", borderColor:"rgba(245,166,35,0.4)" }]}>
-            <View style={{flexDirection:"row",alignItems:"center",gap:6}}><Building2 size={14} color={C.accent}/><Text style={[s.btnText, { color:C.accent }]}>Firmen Portal öffnen →</Text></View>
-          </View>
+          {!(isPro || inTrial || company) ? (
+            <View style={[s.btn, { backgroundColor:"rgba(245,166,35,0.08)", borderColor:"rgba(245,166,35,0.25)" }]}>
+              <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+                <Lock size={14} color={C.accent}/>
+                <Text style={[s.btnText, { color:C.accent }]}>MaterialCheck+ freischalten →</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={[s.btn, { backgroundColor:"rgba(245,166,35,0.15)", borderColor:"rgba(245,166,35,0.4)" }]}>
+              <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+                <Building2 size={14} color={C.accent}/>
+                <Text style={[s.btnText, { color:C.accent }]}>Firmen Portal öffnen →</Text>
+              </View>
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* MaterialCheck+ Upgrade Card — nur für Nicht-Pro-User */}
@@ -466,11 +504,11 @@ export default function PortalSelectScreen() {
         {/* FOOTER — nur auf Web */}
         {isWeb && (
           <View style={s.footer}>
-            <TouchableOpacity onPress={() => Linking.openURL("https://materialcheck.elektrogenius.de/impressum.html")}>
+            <TouchableOpacity onPress={() => Linking.openURL("https://app.elektrogenius.de/impressum.html")}>
               <Text style={s.footerLink}>Impressum</Text>
             </TouchableOpacity>
             <Text style={s.footerDot}>·</Text>
-            <TouchableOpacity onPress={() => Linking.openURL("https://materialcheck.elektrogenius.de/datenschutz-app.html")}>
+            <TouchableOpacity onPress={() => Linking.openURL("https://app.elektrogenius.de/datenschutz-app.html")}>
               <Text style={s.footerLink}>Datenschutz</Text>
             </TouchableOpacity>
             <Text style={s.footerDot}>·</Text>
@@ -494,7 +532,7 @@ export default function PortalSelectScreen() {
             <Text style={s.cookieText}>
               Diese Web-App verwendet notwendige Cookies für die Funktionalität (Profil, Sync). Weitere Informationen in unserer{" "}
               <Text style={s.cookieLinkText}
-                onPress={() => Linking.openURL("https://materialcheck.elektrogenius.de/datenschutz-app.html")}>
+                onPress={() => Linking.openURL("https://app.elektrogenius.de/datenschutz-app.html")}>
                 Datenschutzerklärung
               </Text>.
             </Text>
@@ -509,6 +547,65 @@ export default function PortalSelectScreen() {
           </View>
         </View>
       )}
+
+      {/* ── PRO Gate Modal ── */}
+      <Modal visible={showProModal} transparent animationType="fade">
+        <View style={s.confirmOverlay}>
+          <View style={[s.confirmBox, { padding: 0, overflow: "hidden", maxWidth: 340 }]}>
+            {/* Header Gradient-look */}
+            <View style={{ backgroundColor:"rgba(245,166,35,0.12)", borderBottomWidth:0.5, borderBottomColor:"rgba(245,166,35,0.25)", padding:24, alignItems:"center" }}>
+              <View style={{ width:64, height:64, borderRadius:32, backgroundColor:"rgba(245,166,35,0.18)", borderWidth:1.5, borderColor:"rgba(245,166,35,0.5)", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                <Crown size={32} color={C.accent} />
+              </View>
+              <Text style={{ fontSize:20, fontWeight:"800", color:C.text, marginBottom:4 }}>Team-Funktion</Text>
+              <View style={{ flexDirection:"row", alignItems:"center", gap:4, backgroundColor:"rgba(245,166,35,0.2)", paddingHorizontal:10, paddingVertical:3, borderRadius:20 }}>
+                <Text style={{ fontSize:11, fontWeight:"800", color:C.accent, letterSpacing:0.8 }}>MATERIALCHECK+ ERFORDERLICH</Text>
+              </View>
+            </View>
+            {/* Features */}
+            <View style={{ padding:20 }}>
+              <Text style={{ fontSize:13, color:C.text2, textAlign:"center", marginBottom:16, lineHeight:20 }}>
+                Das Firmen Portal ist Teil von MaterialCheck+.{"\n"}Nur der Chef braucht Pro — Mitarbeiter können kostenlos eingeladen werden.
+              </Text>
+              {[
+                { icon:"👥", text:"Mitarbeiter einladen & verwalten" },
+                { icon:"🏭", text:"Gemeinsame Lager in Echtzeit" },
+                { icon:"📊", text:"Team-Statistiken & Übersicht" },
+                { icon:"🔔", text:"Push-Benachrichtigungen bei Änderungen" },
+                { icon:"📁", text:"Unbegrenzte Lager & Projekte" },
+              ].map(f => (
+                <View key={f.text} style={{ flexDirection:"row", alignItems:"center", gap:10, paddingVertical:7, borderBottomWidth:0.5, borderBottomColor:"rgba(255,255,255,0.05)" }}>
+                  <Text style={{ fontSize:16 }}>{f.icon}</Text>
+                  <Text style={{ fontSize:13, color:C.text2, flex:1 }}>{f.text}</Text>
+                  <Check size={14} color={C.accent} />
+                </View>
+              ))}
+              {/* Preis */}
+              <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginTop:16, marginBottom:16 }}>
+                <View>
+                  <Text style={{ fontSize:11, color:C.text3 }}>7 Tage kostenlos testen</Text>
+                  <Text style={{ fontSize:11, color:C.text3 }}>Danach jederzeit kündbar</Text>
+                </View>
+                <View style={{ alignItems:"flex-end" }}>
+                  <Text style={{ fontSize:24, fontWeight:"800", color:C.accent }}>19,99 €</Text>
+                  <Text style={{ fontSize:11, color:C.text3 }}>/Monat</Text>
+                </View>
+              </View>
+              {/* CTA */}
+              <TouchableOpacity
+                style={{ backgroundColor:C.accent, borderRadius:14, paddingVertical:14, alignItems:"center", marginBottom:10 }}
+                onPress={() => { setShowProModal(false); router.push("/profile"); }}>
+                <Text style={{ fontWeight:"800", fontSize:15, color:"#0d1117" }}>7 Tage kostenlos starten →</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ paddingVertical:10, alignItems:"center" }}
+                onPress={() => setShowProModal(false)}>
+                <Text style={{ fontSize:13, color:C.text3 }}>Später</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Confirm Dialog ── */}
       <Modal visible={confirmVisible} transparent animationType="fade">

@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, Linking, ActivityIndicator,
+  Linking, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -24,7 +24,7 @@ function webDownload(content: string, filename: string, mimeType: string) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  } catch(e) { Alert.alert("Fehler", String(e)); }
+  } catch(e) { console.error("Download-Fehler:", e); }
 }
 
 const C = {
@@ -97,7 +97,7 @@ export default function ReportsScreen() {
       csv += `\n"GESAMT","","",${totalQty},"","","",${totalValue.toFixed(2)},""\n`;
       csv += `"Artikel gesamt: ${totalMats}","Niedrig: ${lowCount}","Leer: ${outCount}",,,,,,\n`;
       webDownload(csv, `materialcheck-${date}.csv`, "text/csv;charset=utf-8;");
-    } catch(e) { Alert.alert("Fehler", String(e)); }
+    } catch(e) { console.error("Download-Fehler:", e); }
     finally { setExporting(false); setExportType(null); }
   };
 
@@ -200,7 +200,7 @@ td{border-bottom:1px solid rgba(255,255,255,0.04);}
 </body></html>`;
 
       webDownload(html, `bericht-${dateFile}.html`, "text/html;charset=utf-8;");
-    } catch(e) { Alert.alert("Fehler", String(e)); }
+    } catch(e) { console.error("Download-Fehler:", e); }
     finally { setExporting(false); setExportType(null); }
   };
 

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator, Platform, Share, Linking,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -64,10 +64,12 @@ export default function CompanyIndex() {
   const invitations    = Array.isArray(rawInvitations) ? rawInvitations : [];
   const checkInvitations = useTeamStore(s => s?.checkInvitations);
   const loadCompany      = useTeamStore(s => s?.loadCompany);
-  const createWarehouse  = useTeamStore(s => s?.createWarehouse);
-  const removeMember     = useTeamStore(s => s?.removeMember);
-  const leaveCompany     = useTeamStore(s => s?.leaveCompany);
-  const deleteWarehouse  = useTeamStore(s => s?.deleteWarehouse);
+  const createWarehouse    = useTeamStore(s => s?.createWarehouse);
+  const removeMember       = useTeamStore(s => s?.removeMember);
+  const leaveCompany       = useTeamStore(s => s?.leaveCompany);
+  const deleteWarehouse    = useTeamStore(s => s?.deleteWarehouse);
+  const syncWarehouse      = useTeamStore(s => s?.syncWarehouse);
+  const sendMaterialChange = useTeamStore(s => s?.sendMaterialChange);
 
   const warehouses = Array.isArray(company?.warehouses) ? company!.warehouses : [];
   const members    = Array.isArray(company?.members)    ? company!.members    : [];
@@ -91,9 +93,13 @@ export default function CompanyIndex() {
   const [removeTarget,   setRemoveTarget]   = useState<{email:string;name:string}|null>(null);
 
   // ── Einkauf: abhaken ───────────────────────────────────
-  const [checkedKeys,    setCheckedKeys]    = useState<Set<string>>(new Set());
-  const [buyModal,       setBuyModal]       = useState(false);
-  const [buyPending,     setBuyPending]     = useState<{whId:string;matName:string;qty:number;min:number;unit:string;price:number;key:string}|null>(null);
+  const [checkedKeys,      setCheckedKeys]      = useState<Set<string>>(new Set());
+  const [buyModal,         setBuyModal]         = useState(false);
+  const [buyPending,       setBuyPending]       = useState<{whId:string;matId:number;matName:string;qty:number;min:number;unit:string;price:number;key:string}|null>(null);
+  const [shoppingFilter,   setShoppingFilter]   = useState<"all"|"empty"|"low">("all");
+  const [shoppingExporting,setShoppingExporting]= useState(false);
+  const [shoppingInfoMsg,  setShoppingInfoMsg]  = useState("");
+  const [shoppingInfoVis,  setShoppingInfoVis]  = useState(false);
 
   const effectiveRole = members.find(m => m.email === myEmail)?.role ?? myRole;
   const isChef = effectiveRole === "owner" || effectiveRole === "admin";
@@ -183,15 +189,122 @@ export default function CompanyIndex() {
     .reduce((s,m) => s + Math.max(0, (m.min||0)-(m.qty||0)) * (m.price||0), 0);
 
   const handleBuyPress = (m: any) => {
-    setBuyPending({ whId:m.whId, matName:m.name, qty:m.qty||0, min:m.min||0, unit:m.unit||"Stk", price:m.price||0, key:m.key });
+    setBuyPending({ whId:m.whId, matId:m.id, matName:m.name, qty:m.qty||0, min:m.min||0, unit:m.unit||"Stk", price:m.price||0, key:m.key });
     setBuyModal(true);
   };
 
-  const confirmBuy = () => {
+  const confirmBuy = async () => {
     if (!buyPending) return;
+    // Sofortiges visuelles Feedback
     setCheckedKeys(prev => new Set([...prev, buyPending.key]));
     setBuyModal(false);
+    const snapshot = buyPending;
     setBuyPending(null);
+    // Warehouse finden und Material-Qty auf min setzen
+    const wh = warehouses.find(w => w.warehouseId === snapshot.whId);
+    if (wh) {
+      const now = new Date().toLocaleTimeString("de-DE", { hour:"2-digit", minute:"2-digit" });
+      const newQty = snapshot.min;
+      const updatedMats = (Array.isArray(wh.materials) ? wh.materials : []).map((m:any) =>
+        m.id === snapshot.matId ? { ...m, qty: newQty } : m
+      );
+      const newAct = { type:"add", name:snapshot.matName, amount:`+${newQty - snapshot.qty} ${snapshot.unit}`, time:now, by:myEmail };
+      const updatedActs = [newAct, ...(Array.isArray((wh as any).activities) ? (wh as any).activities : [])].slice(0, 40);
+      sendMaterialChange?.(snapshot.whId, snapshot.matId, newQty);
+      await syncWarehouse?.(snapshot.whId, updatedMats, Array.isArray(wh.tasks) ? wh.tasks : [], updatedActs);
+    }
+  };
+
+  // ── Einkauf: Gefilterte Liste ─────────────────────────────────────────────
+  const activeShoppingItems = allLowMats.filter(m => !checkedKeys.has(m.key));
+  const filteredShoppingItems = shoppingFilter === "empty"
+    ? activeShoppingItems.filter(m => (m.qty||0) === 0)
+    : shoppingFilter === "low"
+    ? activeShoppingItems.filter(m => (m.qty||0) > 0)
+    : activeShoppingItems;
+  const filteredShoppingCost = filteredShoppingItems.reduce((s,m) => s + Math.max(0,(m.min||0)-(m.qty||0))*(m.price||0), 0);
+
+  // ── Einkauf: WhatsApp / PDF ────────────────────────────────────────────────
+  const shareTeamList = async () => {
+    if (filteredShoppingItems.length === 0) {
+      setShoppingInfoMsg("Keine Artikel in der gefilterten Liste.");
+      setShoppingInfoVis(true);
+      return;
+    }
+    const date = new Date().toLocaleDateString("de-DE");
+    let text = `ElektroGenius MaterialCheck\nEinkaufsliste Team – ${date}\n\n`;
+    filteredShoppingItems.forEach(item => {
+      const needed = Math.max(0,(item.min||0)-(item.qty||0));
+      text += `${item.name} (${item.whName})\n`;
+      text += `  Bestand: ${item.qty||0} ${item.unit||"Stk"} | Bestellen: ${needed} ${item.unit||"Stk"}`;
+      if ((item.price||0) > 0) text += ` | ~€${(needed*(item.price||0)).toFixed(2)}`;
+      text += "\n\n";
+    });
+    if (filteredShoppingCost > 0) text += `Gesamt: €${filteredShoppingCost.toFixed(2)}\n`;
+    text += `\nhttps://elektrogenius.de`;
+    try { await Share.share({ message: text, title: "Einkaufsliste" }); } catch {}
+  };
+
+  const exportTeamListPDF = async () => {
+    if (filteredShoppingItems.length === 0) {
+      setShoppingInfoMsg("Keine Artikel zum Exportieren.");
+      setShoppingInfoVis(true);
+      return;
+    }
+    const date = new Date().toLocaleDateString("de-DE");
+    let tableRows = "";
+    filteredShoppingItems.forEach((item, idx) => {
+      const needed = Math.max(0,(item.min||0)-(item.qty||0));
+      const isEmpty = (item.qty||0) === 0;
+      const statusColor = isEmpty ? "#f85149" : "#f5a623";
+      const statusLabel = isEmpty ? "Leer" : "Niedrig";
+      const bg = idx%2===0 ? "#161b22" : "#1c2230";
+      const cost = (item.price||0) > 0 ? `€${(needed*(item.price||0)).toFixed(2)}` : "–";
+      tableRows += `<tr style="background:${bg};">
+        <td style="padding:10px 14px;color:#e6edf3;">${item.name}</td>
+        <td style="padding:10px 14px;color:#8b949e;font-size:12px;">${item.whName}</td>
+        <td style="padding:10px 14px;text-align:center;color:#e6edf3;">${item.qty||0} ${item.unit||"Stk"}</td>
+        <td style="padding:10px 14px;text-align:center;color:#f5a623;font-weight:700;">${needed} ${item.unit||"Stk"}</td>
+        <td style="padding:10px 14px;text-align:center;color:#e6edf3;">${cost}</td>
+        <td style="padding:10px 14px;text-align:center;"><span style="background:${statusColor}22;color:${statusColor};padding:3px 8px;border-radius:12px;font-size:11px;">${statusLabel}</span></td>
+      </tr>`;
+    });
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px;}
+.header{background:#161b22;border:1px solid rgba(245,166,35,0.3);border-radius:12px;padding:20px;margin-bottom:20px;}
+table{width:100%;border-collapse:collapse;background:#161b22;border-radius:12px;border:1px solid rgba(255,255,255,0.08);}
+th{background:#0d1117;color:#8b949e;font-size:11px;text-transform:uppercase;padding:12px 14px;text-align:left;}
+td{border-bottom:1px solid rgba(255,255,255,0.05);}
+.footer{margin-top:20px;text-align:center;color:#6e7681;font-size:12px;padding:16px;background:#161b22;border-radius:10px;}
+</style></head><body>
+<div class="header"><h1>Team-Einkaufsliste</h1><p style="color:#8b949e;margin-top:4px;">MaterialCheck by ElektroGenius · ${date} · ${company?.companyName}</p></div>
+<table><thead><tr>
+<th>Material</th><th>Lager</th><th style="text-align:center;">Bestand</th><th style="text-align:center;">Bestellen</th>
+<th style="text-align:center;">Kosten</th><th style="text-align:center;">Status</th>
+</tr></thead><tbody>${tableRows}</tbody></table>
+${filteredShoppingCost>0?`<p style="margin-top:16px;text-align:right;font-size:16px;font-weight:700;color:#3fb950;">Gesamt: €${filteredShoppingCost.toFixed(2)}</p>`:""}
+<div class="footer"><p>ElektroGenius · elektrogenius.de</p></div>
+</body></html>`;
+
+    if (Platform.OS === "web") {
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      return;
+    }
+
+    setShoppingExporting(true);
+    try {
+      const FileSystem = require("expo-file-system/legacy");
+      const Sharing = require("expo-sharing");
+      const dateFile = new Date().toISOString().slice(0,10);
+      const path = (FileSystem.documentDirectory??"") + `team-einkaufsliste-${dateFile}.html`;
+      await FileSystem.writeAsStringAsync(path, html, { encoding:"utf8" });
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType:"text/html", dialogTitle:"Team-Einkaufsliste" });
+    } catch(e) {
+      setShoppingInfoMsg(String(e));
+      setShoppingInfoVis(true);
+    } finally { setShoppingExporting(false); }
   };
 
   // ── Kein Unternehmen ─────────────────────────────────────────────────────
@@ -518,10 +631,14 @@ export default function CompanyIndex() {
 
       {/* ── EINKAUF ── */}
       {activeTab === "shopping" && isChef && (
-        <ScrollView style={s.content} contentContainerStyle={{paddingBottom:bottomPad+80}}>
+        <View style={{flex:1}}>
+          {/* Hinweis */}
+          <View style={{flexDirection:"row",alignItems:"center",gap:8,backgroundColor:"rgba(79,163,247,0.08)",borderBottomWidth:0.5,borderBottomColor:"rgba(79,163,247,0.2)",paddingHorizontal:14,paddingVertical:8}}>
+            <Text style={{flex:1,fontSize:11,color:C.text2,lineHeight:16}}>Tippe auf einen Artikel um ihn als eingekauft zu markieren — Bestand wird automatisch synchronisiert.</Text>
+          </View>
           {/* Zusammenfassung */}
           {allLowMats.length > 0 && (
-            <View style={s.summaryRow}>
+            <View style={[s.summaryRow,{paddingHorizontal:14,paddingTop:10,paddingBottom:0}]}>
               <View style={s.summaryCard}>
                 <Text style={s.summaryLabel}>Gesamt</Text>
                 <Text style={[s.summaryValue,{color:C.accent}]}>{allLowMats.length}</Text>
@@ -534,77 +651,110 @@ export default function CompanyIndex() {
                 <Text style={s.summaryLabel}>Gekauft</Text>
                 <Text style={[s.summaryValue,{color:C.green}]}>{checkedKeys.size}</Text>
               </View>
-              {totalShoppingCost > 0 && (
+              {filteredShoppingCost > 0 && (
                 <View style={s.summaryCard}>
                   <Text style={s.summaryLabel}>~Kosten</Text>
-                  <Text style={[s.summaryValue,{color:C.green,fontSize:14}]}>€{totalShoppingCost.toFixed(0)}</Text>
+                  <Text style={[s.summaryValue,{color:C.green,fontSize:14}]}>€{filteredShoppingCost.toFixed(0)}</Text>
                 </View>
               )}
             </View>
           )}
-
-          {allLowMats.length === 0 ? (
-            <View style={s.emptyState}>
-              <CheckCircle size={48} color={C.green}/>
-              <Text style={s.emptyTitle}>Alles gut!</Text>
-              <Text style={s.emptyText}>Alle Lager sind ausreichend.</Text>
+          {/* Filter Chips */}
+          {allLowMats.length > 0 && (
+            <View style={[s.filterRow]}>
+              {([
+                {key:"all" as const, label:`Alle (${allLowMats.length})`},
+                {key:"empty" as const, label:`Leer (${allLowMats.filter(m=>(m.qty||0)===0).length})`},
+                {key:"low" as const, label:`Niedrig (${allLowMats.filter(m=>(m.qty||0)>0).length})`},
+              ]).map(f=>(
+                <TouchableOpacity key={f.key} style={[s.filterChip,shoppingFilter===f.key&&s.filterChipActive]} onPress={()=>setShoppingFilter(f.key)}>
+                  <Text style={[s.filterChipText,shoppingFilter===f.key&&s.filterChipTextActive]}>{f.label}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
-          ) : warehouses.map(wh=>{
-            const mats = Array.isArray(wh.materials)?wh.materials:[];
-            const lowMats = mats.filter((m:any)=>(m?.qty||0)<(m?.min||0));
-            if (lowMats.length===0) return null;
-            return (
-              <View key={wh.warehouseId} style={{marginBottom:8}}>
-                <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:6,marginTop:4}}>
-                  <WhIcon iconKey={wh.warehouseIcon||wh.icon||"warehouse"} size={14} color={C.accent}/>
-                  <Text style={s.whSectionHeader}>{wh.warehouseName}</Text>
-                </View>
-                {lowMats.filter((m:any) => !checkedKeys.has(`${wh.warehouseId}-${m?.id}`)).map((m:any,i:number)=>{
-                  const key = `${wh.warehouseId}-${m?.id}`;
-                  const needed = Math.max(0,(m.min||0)-(m.qty||0));
-                  const cost = needed * (m.price||0);
-                  const isEmpty = (m.qty||0)===0;
-                  return (
-                    <TouchableOpacity key={i} style={s.shoppingItem}
-                      onPress={()=>handleBuyPress({...m,whId:wh.warehouseId,whName:wh.warehouseName,key})}>
-                      <View style={s.itemCheckbox}>
-                        <View style={s.checkboxEmpty}/>
-                      </View>
-                      <View style={[s.itemCatIcon,{backgroundColor:isEmpty?"rgba(248,81,73,0.12)":"rgba(245,166,35,0.12)"}]}>
-                        <Package size={16} color={isEmpty?C.red:C.accent}/>
-                      </View>
-                      <View style={{flex:1}}>
-                        <Text style={{fontSize:13,fontWeight:"600",color:C.text}}>{m?.name}</Text>
-                        <View style={{flexDirection:"row",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
-                          <Text style={{fontSize:11,color:C.text2}}>Bestand: {m?.qty} {m?.unit}</Text>
-                          <Text style={{fontSize:11,color:C.text3}}>·</Text>
-                          <Text style={{fontSize:11,color:C.accent,fontWeight:"600"}}>Bestellen: {needed} {m?.unit}</Text>
-                          {cost > 0 && <>
-                            <Text style={{fontSize:11,color:C.text3}}>·</Text>
-                            <Text style={{fontSize:11,color:C.green}}>€{cost.toFixed(2)}</Text>
-                          </>}
-                        </View>
-                      </View>
-                      <View style={[s.statusBadge,{backgroundColor:isEmpty?"rgba(248,81,73,0.15)":"rgba(245,166,35,0.15)"}]}>
-                        <Text style={{fontSize:10,fontWeight:"600",color:isEmpty?C.red:C.accent}}>{isEmpty?"Leer":"Niedrig"}</Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            );
-          })}
-
-          {checkedKeys.size > 0 && (
-            <TouchableOpacity style={[s.bigBtn,{backgroundColor:C.surface2,borderWidth:0.5,borderColor:C.border2,marginTop:8}]}
-              onPress={()=>setCheckedKeys(new Set())}>
-              <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                <X size={14} color={C.text2}/>
-                <Text style={{color:C.text2,fontWeight:"600",fontSize:13}}>Liste zurücksetzen</Text>
-              </View>
-            </TouchableOpacity>
           )}
-        </ScrollView>
+          <ScrollView style={s.content} contentContainerStyle={{paddingBottom:bottomPad+80}}>
+            {allLowMats.length === 0 ? (
+              <View style={s.emptyState}>
+                <CheckCircle size={48} color={C.green}/>
+                <Text style={s.emptyTitle}>Alles gut!</Text>
+                <Text style={s.emptyText}>Alle Lager sind ausreichend.</Text>
+              </View>
+            ) : warehouses.map(wh=>{
+              const mats = Array.isArray(wh.materials)?wh.materials:[];
+              const lowMats = mats.filter((m:any)=>{
+                if ((m?.qty||0) >= (m?.min||0)) return false;
+                if (checkedKeys.has(`${wh.warehouseId}-${m?.id}`)) return false;
+                if (shoppingFilter === "empty") return (m?.qty||0) === 0;
+                if (shoppingFilter === "low") return (m?.qty||0) > 0;
+                return true;
+              });
+              if (lowMats.length===0) return null;
+              return (
+                <View key={wh.warehouseId} style={{marginBottom:8}}>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:8,marginBottom:6,marginTop:4}}>
+                    <WhIcon iconKey={wh.warehouseIcon||wh.icon||"warehouse"} size={14} color={C.accent}/>
+                    <Text style={s.whSectionHeader}>{wh.warehouseName}</Text>
+                  </View>
+                  {lowMats.map((m:any,i:number)=>{
+                    const key = `${wh.warehouseId}-${m?.id}`;
+                    const needed = Math.max(0,(m.min||0)-(m.qty||0));
+                    const cost = needed * (m.price||0);
+                    const isEmpty = (m.qty||0)===0;
+                    return (
+                      <TouchableOpacity key={i} style={s.shoppingItem}
+                        onPress={()=>handleBuyPress({...m,whId:wh.warehouseId,whName:wh.warehouseName,key})}>
+                        <View style={s.itemCheckbox}>
+                          <View style={s.checkboxEmpty}/>
+                        </View>
+                        <View style={[s.itemCatIcon,{backgroundColor:isEmpty?"rgba(248,81,73,0.12)":"rgba(245,166,35,0.12)"}]}>
+                          <Package size={16} color={isEmpty?C.red:C.accent}/>
+                        </View>
+                        <View style={{flex:1}}>
+                          <Text style={{fontSize:13,fontWeight:"600",color:C.text}}>{m?.name}</Text>
+                          <View style={{flexDirection:"row",alignItems:"center",gap:6,marginTop:2,flexWrap:"wrap"}}>
+                            <Text style={{fontSize:11,color:C.text2}}>Bestand: {m?.qty} {m?.unit}</Text>
+                            <Text style={{fontSize:11,color:C.text3}}>·</Text>
+                            <Text style={{fontSize:11,color:C.accent,fontWeight:"600"}}>Bestellen: {needed} {m?.unit}</Text>
+                            {cost > 0 && <>
+                              <Text style={{fontSize:11,color:C.text3}}>·</Text>
+                              <Text style={{fontSize:11,color:C.green}}>€{cost.toFixed(2)}</Text>
+                            </>}
+                          </View>
+                        </View>
+                        <View style={[s.statusBadge,{backgroundColor:isEmpty?"rgba(248,81,73,0.15)":"rgba(245,166,35,0.15)"}]}>
+                          <Text style={{fontSize:10,fontWeight:"600",color:isEmpty?C.red:C.accent}}>{isEmpty?"Leer":"Niedrig"}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              );
+            })}
+            {checkedKeys.size > 0 && (
+              <TouchableOpacity style={[s.bigBtn,{backgroundColor:C.surface2,borderWidth:0.5,borderColor:C.border2,marginTop:8}]}
+                onPress={()=>setCheckedKeys(new Set())}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                  <X size={14} color={C.text2}/>
+                  <Text style={{color:C.text2,fontWeight:"600",fontSize:13}}>Liste zurücksetzen</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+          {/* Bottom Buttons */}
+          {allLowMats.length > 0 && (
+            <View style={[s.shoppingBottomBtns,{paddingBottom:bottomPad+8}]}>
+              <TouchableOpacity style={[s.shoppingBtn,{backgroundColor:"rgba(79,163,247,0.15)",borderColor:"rgba(79,163,247,0.3)"}]} onPress={shareTeamList}>
+                <Text style={[s.shoppingBtnText,{color:C.blue}]}>WhatsApp</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.shoppingBtn,{backgroundColor:C.accent,borderColor:C.accent}]} onPress={exportTeamListPDF} disabled={shoppingExporting}>
+                {shoppingExporting
+                  ? <ActivityIndicator color="#000" size="small"/>
+                  : <Text style={[s.shoppingBtnText,{color:"#000"}]}>PDF Export</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       )}
 
       {/* ── KI ── */}
@@ -750,6 +900,18 @@ export default function CompanyIndex() {
           </View>
         </View>
       </Modal>
+
+      {/* ── EINKAUF INFO MODAL ── */}
+      <Modal visible={shoppingInfoVis} transparent animationType="fade">
+        <View style={s.overlayCenter}>
+          <View style={s.dialogBox}>
+            <Text style={s.dialogText}>{shoppingInfoMsg}</Text>
+            <TouchableOpacity style={[s.dialogBtn,{backgroundColor:C.surface2,width:"100%"}]} onPress={()=>setShoppingInfoVis(false)}>
+              <Text style={{color:C.text2,fontWeight:"600"}}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -829,4 +991,12 @@ const s = StyleSheet.create({
   dialogText:{fontSize:13,color:C.text2,marginBottom:20,lineHeight:20,marginTop:4},
   dialogBtns:{flexDirection:"row",gap:10},
   dialogBtn:{flex:1,padding:12,borderRadius:10,alignItems:"center"},
+  filterRow:{flexDirection:"row",gap:6,paddingHorizontal:14,paddingVertical:10,borderBottomWidth:0.5,borderBottomColor:"rgba(255,255,255,0.08)"},
+  filterChip:{paddingHorizontal:11,paddingVertical:5,borderRadius:20,backgroundColor:"#21262d",borderWidth:0.5,borderColor:"rgba(255,255,255,0.14)"},
+  filterChipActive:{backgroundColor:"rgba(245,166,35,0.12)",borderColor:"#f5a623"},
+  filterChipText:{fontSize:11,color:"#8b949e",fontWeight:"500"},
+  filterChipTextActive:{color:"#f5a623"},
+  shoppingBottomBtns:{flexDirection:"row",gap:10,paddingHorizontal:14,paddingTop:12,borderTopWidth:0.5,borderTopColor:"rgba(255,255,255,0.08)",backgroundColor:"#0d1117"},
+  shoppingBtn:{flex:1,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,padding:13,borderRadius:12,borderWidth:0.5},
+  shoppingBtnText:{fontSize:14,fontWeight:"700"},
 });
