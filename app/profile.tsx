@@ -611,6 +611,17 @@ export default function ProfileScreen() {
     if (!companyNameInput.trim()) { setInfoTitle("Fehler"); setInfoText("Firmenname eingeben"); setInfoModal(true); return; }
     if (!profile.email) { setInfoTitle("Fehler"); setInfoText("Bitte zuerst Email im Profil speichern und in Cloud synchronisieren"); setInfoModal(true); return; }
     if (!hasCloudPin) { setInfoTitle("Fehler"); setInfoText("Bitte zuerst Cloud-PIN festlegen — das Profil muss in der Cloud gespeichert sein"); setInfoModal(true); return; }
+    // ── Sicherheits-Check: Pro-Status vom Backend verifizieren ──
+    if (!isPro && !inTrial) {
+      // Nochmal frisch vom Backend laden
+      await loadPro?.();
+      const freshState = useProStore.getState();
+      if (!freshState.isPro && !freshState.inTrial) {
+        setShowCompanyModal(false);
+        setShowTeamPaywall(true);
+        return;
+      }
+    }
     setCreatingCompany(true);
     try {
       const deviceId = await getOrCreateDeviceId();
