@@ -117,7 +117,7 @@ export default function ProfileScreen() {
   const restoreFromCloud = _store?.restoreFromCloud;
 
   // Abo-Status
-  const { isPro, inTrial, trialEndsAt, load: loadPro } = useProStore();
+  const { isPro, inTrial, trialEndsAt, load: loadPro, refresh: refreshPro } = useProStore();
   const [aboLoading, setAboLoading] = useState(false);
   const [aboError, setAboError] = useState("");
 
@@ -611,18 +611,18 @@ export default function ProfileScreen() {
     if (!companyNameInput.trim()) { setInfoTitle("Fehler"); setInfoText("Firmenname eingeben"); setInfoModal(true); return; }
     if (!profile.email) { setInfoTitle("Fehler"); setInfoText("Bitte zuerst Email im Profil speichern und in Cloud synchronisieren"); setInfoModal(true); return; }
     if (!hasCloudPin) { setInfoTitle("Fehler"); setInfoText("Bitte zuerst Cloud-PIN festlegen — das Profil muss in der Cloud gespeichert sein"); setInfoModal(true); return; }
-    // ── Sicherheits-Check: Pro-Status vom Backend verifizieren ──
-    if (!isPro && !inTrial) {
-      // Nochmal frisch vom Backend laden
-      await loadPro?.();
-      const freshState = useProStore.getState();
-      if (!freshState.isPro && !freshState.inTrial) {
-        setShowCompanyModal(false);
-        setShowTeamPaywall(true);
-        return;
-      }
-    }
+
+    // ── PFLICHT: Pro-Status immer frisch vom Backend holen ──────────────────
     setCreatingCompany(true);
+    try { await refreshPro?.(); } catch { /* silent – Cache bleibt */ }
+    const { isPro: freshPro, inTrial: freshTrial } = useProStore.getState();
+    if (!freshPro && !freshTrial) {
+      setCreatingCompany(false);
+      setShowCompanyModal(false);
+      setShowTeamPaywall(true);
+      return;
+    }
+    // ──────────────────────────────────────────────────────────────────────────
     try {
       const deviceId = await getOrCreateDeviceId();
       const ok = await createCompany?.(profile.email, profile.userName||profile.firmName, companyNameInput.trim(), deviceId);
@@ -1008,7 +1008,8 @@ export default function ProfileScreen() {
 
         {!company ? (
           <TouchableOpacity style={[s.actionRow,{borderColor:"rgba(245,166,35,0.5)",backgroundColor:"rgba(245,166,35,0.08)"}]}
-            onPress={()=>{
+            onPress={async ()=>{
+              // Schneller Cache-Check (UX) – definitiver Check läuft in handleCreateCompany
               if (!isPro && !inTrial) { setShowTeamPaywall(true); return; }
               setCompanyNameInput(profile.firmName||""); setShowCompanyModal(true);
             }}>
