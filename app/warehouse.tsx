@@ -288,9 +288,8 @@ export default function WarehouseScreen() {
     low:    { label:"Niedrig", color:C.green },
   };
 
-  // ── Excel-Export .xlsx (nur Web, nur Pro/Trial) ───
+  // ── Excel-Export .xlsx (Web + Native, nur Pro/Trial) ───
   const exportExcel = async () => {
-    if (Platform.OS !== "web" || typeof document === "undefined") return;
     try {
       const XLSX = await import("xlsx");
       const rows = materials.map(m => {
@@ -307,24 +306,51 @@ export default function WarehouseScreen() {
         };
       });
       const ws = XLSX.utils.json_to_sheet(rows);
-      // Column widths
       ws["!cols"] = [{ wch:28 }, { wch:8 }, { wch:10 }, { wch:14 }, { wch:14 }, { wch:16 }, { wch:10 }];
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, warehouseName || "Lager");
       const dateStr = new Date().toLocaleDateString("de-DE").replace(/\./g, "-");
-      XLSX.writeFile(wb, `${warehouseName || "Lager"}_Materialliste_${dateStr}.xlsx`);
+      const fileName = `${warehouseName || "Lager"}_Materialliste_${dateStr}.xlsx`;
+      if (Platform.OS === "web") {
+        XLSX.writeFile(wb, fileName);
+      } else {
+        const FileSystem = require("expo-file-system/legacy");
+        const Sharing = require("expo-sharing");
+        const base64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+        const path = (FileSystem.documentDirectory ?? "") + fileName;
+        await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(path, { mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", dialogTitle: "Materialliste exportieren" });
+        }
+      }
     } catch {
-      // Fallback: CSV mit BOM für ältere Geräte
-      const BOM = "\uFEFF";
-      const header = ["Materialname","Menge","Einheit","Mindestmenge","Preis (€/Stk)","Gesamtwert (€)","Status"].join(";");
-      const rows = materials.map(m => {
-        const qty = m.qty ?? 0; const price = m.price ?? 0;
-        return [`"${(m.name??"").replace(/"/g,'""')}"`,qty,`"${m.unit??""}"`,m.min??0,price>0?price.toFixed(2):"",price>0?(qty*price).toFixed(2):"",qty===0?"Leer":qty<(m.min??0)?"Niedrig":"OK"].join(";");
-      });
-      const blob = new Blob([BOM+[header,...rows].join("\r\n")],{type:"text/csv;charset=utf-8;"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href=url; a.download=`${warehouseName||"Lager"}_Materialliste.csv`;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      // Fallback: CSV
+      if (Platform.OS === "web") {
+        const BOM = "\uFEFF";
+        const header = ["Materialname","Menge","Einheit","Mindestmenge","Preis (€/Stk)","Gesamtwert (€)","Status"].join(";");
+        const rows = materials.map(m => {
+          const qty = m.qty ?? 0; const price = m.price ?? 0;
+          return [`"${(m.name??"").replace(/"/g,'""')}"`,qty,`"${m.unit??""}"`,m.min??0,price>0?price.toFixed(2):"",price>0?(qty*price).toFixed(2):"",qty===0?"Leer":qty<(m.min??0)?"Niedrig":"OK"].join(";");
+        });
+        const blob = new Blob([BOM+[header,...rows].join("\r\n")],{type:"text/csv;charset=utf-8;"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href=url; a.download=`${warehouseName||"Lager"}_Materialliste.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      } else {
+        const FileSystem = require("expo-file-system/legacy");
+        const Sharing = require("expo-sharing");
+        const BOM = "\uFEFF";
+        const header = ["Materialname","Menge","Einheit","Mindestmenge","Preis (€/Stk)","Gesamtwert (€)","Status"].join(";");
+        const rows = materials.map(m => {
+          const qty = m.qty ?? 0; const price = m.price ?? 0;
+          return [`"${(m.name??"").replace(/"/g,'""')}"`,qty,`"${m.unit??""}"`,m.min??0,price>0?price.toFixed(2):"",price>0?(qty*price).toFixed(2):"",qty===0?"Leer":qty<(m.min??0)?"Niedrig":"OK"].join(";");
+        });
+        const csv = BOM+[header,...rows].join("\r\n");
+        const dateFile = new Date().toISOString().slice(0,10);
+        const path = (FileSystem.documentDirectory??"")+`${warehouseName||"Lager"}_Materialliste_${dateFile}.csv`;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: "utf8" });
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(path, { mimeType:"text/csv", dialogTitle:"Materialliste exportieren" });
+      }
     }
   };
 
@@ -353,7 +379,7 @@ export default function WarehouseScreen() {
           <Text style={s.headerTitle} numberOfLines={1}>{warehouseName || "Lager"}</Text>
           <Text style={s.headerSub}>{materials.length} Mat. · {userRole==="readonly"?" Lesen":" Bearbeiten"}{syncing?" · Sync...":""}</Text>
         </View>
-        {(isPro || inTrial) && activeTab === "materials" && Platform.OS === "web" && materials.length > 0 && (
+        {(isPro || inTrial) && activeTab === "materials" && materials.length > 0 && (
           <TouchableOpacity
             style={[s.addBtn, { backgroundColor:"rgba(63,185,80,0.2)", borderColor:"rgba(63,185,80,0.4)", marginRight:6 }]}
             onPress={exportExcel}
@@ -468,7 +494,7 @@ export default function WarehouseScreen() {
           })}
 
           {/* Excel-Export Banner: Pro-Hinweis für Nicht-Pro-Nutzer auf Web */}
-          {!isPro && !inTrial && Platform.OS === "web" && materials.length > 0 && (
+          {!isPro && !inTrial && materials.length > 0 && (
             <TouchableOpacity
               style={{ flexDirection:"row", alignItems:"center", gap:10, margin:12, padding:14, borderRadius:16, backgroundColor:"rgba(245,166,35,0.08)", borderWidth:1, borderColor:"rgba(245,166,35,0.25)" }}
               onPress={() => router.push("/profile")}
