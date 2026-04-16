@@ -2,7 +2,7 @@
   "expo": {
     "name": "Material Check | ElektroGenius",
     "slug": "material-check-elektrogenius",
-    "version": "1.8.8",
+    "version": "1.8.9",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "materialcheck",
@@ -18,7 +18,7 @@
     },
     "android": {
       "package": "de.elektrogenius.materialcheck.firmenwagen",
-      "versionCode": 22,
+      "versionCode": 23,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0d1117"
