@@ -1,4 +1,4 @@
-const CACHE_NAME = "mc-assets-v1";
+const CACHE_NAME = "mc-assets-v2";
 
 // Nur gehashte Assets cachen (JS/CSS/Bilder) — kein HTML
 const ASSET_PATTERN = /\/_expo\/static\/|\/assets\//;
@@ -22,13 +22,13 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // HTML immer vom Netzwerk laden (nie aus Cache)
+  // HTML immer frisch vom Server laden — Browser-HTTP-Cache umgehen
   if (
     event.request.mode === "navigate" ||
     event.request.headers.get("accept")?.includes("text/html")
   ) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request))
     );
     return;
   }
